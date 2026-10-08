@@ -11,8 +11,8 @@ android {
         applicationId = "com.fl8y.lightcloner"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-dev"
+        versionCode = 2
+        versionName = "0.2.0-dev"
     }
 
     buildTypes {
@@ -42,7 +42,10 @@ kotlin {
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
 
-    // Optional connection path. Wireless debugging / ADB remains independent.
+    // Real Wireless ADB transport and pairing support.
+    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
+
+    // Optional elevated-operation path. Wireless debugging remains independent.
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
 }
