@@ -54,10 +54,10 @@ def patch_gradle() -> bool:
         source,
     )
 
-        r"(?m)^\s*jcenter\(\)\s*$",
+    # Gradle 9 removed RepositoryHandler.jcenter(). Maven Central is already
     # declared by this upstream module; preserve JitPack and Google Maven.
     source = re.sub(
-        r"(?m)^\\s*jcenter\\(\\)\\s*$",
+        r"(?m)^\s*jcenter\(\)\s*$",
         "    // jcenter() retired; Maven Central is declared below.",
         source,
     )
