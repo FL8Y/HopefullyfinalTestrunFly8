@@ -1,0 +1,124 @@
+name: FLY8 Android CI and Review Cadence
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fly8-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-audit:
+    name: Build, audit, and review reminders
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history for cadence checks
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --licenses <<<'y' || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Run FLY8 source invariant audit
+        run: python3 scripts/audit_project.py
+
+      - name: Compute commit review cadence
+        id: cadence
+        shell: bash
+        run: |
+          set -euo pipefail
+          anchor="$(tr -d '[:space:]' < docs/COMMIT_CADENCE_ANCHOR.txt)"
+          git cat-file -e "${anchor}^{commit}"
+          count="$(git rev-list --count HEAD "^$anchor")"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+          memory_due=false
+          blueprint_due=false
+          if (( count > 0 && count % 6 == 0 )); then
+            memory_due=true
+          fi
+          if (( count > 0 && count % 9 == 0 )); then
+            blueprint_due=true
+          fi
+
+          echo "memory_review_due=$memory_due" >> "$GITHUB_OUTPUT"
+          echo "blueprint_refresh_due=$blueprint_due" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## FLY8 review cadence"
+            echo ""
+            echo "- Commits after cadence anchor: **$count**"
+            echo "- Six-commit source/memory review due: **$memory_due**"
+            echo "- Nine-commit guide refresh due: **$blueprint_due**"
+            echo ""
+            echo "A reminder is not a substitute for reading the guide, reviewing recent diffs, or validating the actual runtime."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Six-commit source and requirements review reminder
+        if: steps.cadence.outputs.memory_review_due == 'true'
+        run: |
+          {
+            echo "## REQUIRED REVIEW CHECKPOINT"
+            echo ""
+            echo "Review the guide repository, development protocol, all 76 acceptance rows, reference implementation map, last six commits, and this workflow/build result."
+            echo "Resolve any mismatch before beginning another subsystem. Check for missing features, invented success states, brand leakage, and license gaps."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refresh guide prompt on nine-commit checkpoint
+        if: steps.cadence.outputs.blueprint_refresh_due == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p build/review
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/FL8Y/readthischatgpt/main/here%20is%20your%20guiding%20prompt" \
+            --output "build/review/guiding-prompt.txt"
+          test -s "build/review/guiding-prompt.txt"
+          {
+            echo "## Guide refresh"
+            echo ""
+            echo "The current guide was fetched as an artifact because the nine-commit refresh checkpoint is due. Read the artifact before major architecture work."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload refreshed guide prompt
+        if: steps.cadence.outputs.blueprint_refresh_due == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly8-guiding-prompt-checkpoint
+          path: build/review/guiding-prompt.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly8-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
