@@ -39,6 +39,10 @@ class Fly8AdbManager(context: Context) : AbsAdbConnectionManager() {
         return if (model.isBlank()) "FLY8" else "FLY8-$model"
     }
 
+    fun autoConnect(timeoutMs: Long): Boolean {
+        return super.autoConnect(appContext, timeoutMs)
+    }
+
     private fun ensureKeyPair(): StoredKeyPair {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
