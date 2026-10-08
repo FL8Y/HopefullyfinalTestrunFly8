@@ -1,0 +1,4 @@
+[submodule "vendor/virtualapp16"]
+	path = vendor/virtualapp16
+	url = https://github.com/f0restw0w/VirtualApp_16.git
+	branch = main
