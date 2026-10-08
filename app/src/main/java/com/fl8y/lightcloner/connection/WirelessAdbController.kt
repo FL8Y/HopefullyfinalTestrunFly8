@@ -97,7 +97,8 @@ class WirelessAdbController(
     }
 
     fun close() {
-        runCatching { manager.close() }
+        // Close the transport but keep the Android Keystore identity for the next connection.
+        runCatching { manager.disconnect() }
     }
 
     private fun connectionMessage(error: Throwable): String {
