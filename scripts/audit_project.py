@@ -9,6 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "app/src/main/AndroidManifest.xml"
 COLORS = ROOT / "app/src/main/res/values/colors.xml"
+ICON_ADAPTIVE = ROOT / "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
+ICON_ADAPTIVE_ROUND = ROOT / "app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml"
+ICON_FOREGROUND = ROOT / "app/src/main/res/mipmap-nodpi/ic_launcher_foreground.png"
 APP_GRADLE = ROOT / "app/build.gradle.kts"
 SETTINGS = ROOT / "settings.gradle.kts"
 MODULES = ROOT / ".gitmodules"
@@ -33,6 +36,7 @@ EXPECTED_COLORS = {
     "fly8_text": "#FCFDFD",
     "fly8_pink": "#F5DADA",
     "fly8_muted": "#626773",
+    "fly8_icon_bg": "#01132A",
 }
 errors: list[str] = []
 warnings: list[str] = []
@@ -79,6 +83,8 @@ def main() -> int:
                 require(label == "FLY8", f"Expected application label FLY8, got {label!r}.")
                 app_name = app.attrib.get(ANDROID_NS + "name")
                 require(app_name == ".Fly8Application", f"Expected .Fly8Application bootstrap, got {app_name!r}.")
+                require(app.attrib.get(ANDROID_NS + "icon") == "@mipmap/ic_launcher", "Manifest launcher icon must reference @mipmap/ic_launcher.")
+                require(app.attrib.get(ANDROID_NS + "roundIcon") == "@mipmap/ic_launcher_round", "Manifest round launcher icon must reference @mipmap/ic_launcher_round.")
             activity_names = {
                 node.attrib.get(ANDROID_NS + "name", "")
                 for node in manifest.findall("./application/activity")
@@ -103,6 +109,22 @@ def main() -> int:
                 require(actual.get(name) == value, f"Color {name} should be {value}, got {actual.get(name)!r}.")
         except ET.ParseError as exc:
             errors.append(f"Color XML is invalid: {exc}")
+
+    require(ICON_ADAPTIVE.is_file(), "Adaptive launcher icon XML is missing.")
+    require(ICON_ADAPTIVE_ROUND.is_file(), "Adaptive round launcher icon XML is missing.")
+    require(ICON_FOREGROUND.is_file() and ICON_FOREGROUND.stat().st_size > 1000,
+            "Cyber-eye transparent launcher foreground is missing or unexpectedly small.")
+    for icon_xml in (ICON_ADAPTIVE, ICON_ADAPTIVE_ROUND):
+        if icon_xml.is_file():
+            try:
+                icon_root = ET.parse(icon_xml).getroot()
+                require(icon_root.tag == "adaptive-icon", f"{icon_xml.name} is not an adaptive icon resource.")
+                require(any(node.attrib.get(ANDROID_NS + "drawable") == "@mipmap/ic_launcher_foreground"
+                            for node in icon_root), f"{icon_xml.name} lacks the FLY8 foreground artwork.")
+                require(any(node.attrib.get(ANDROID_NS + "drawable") == "@color/fly8_icon_bg"
+                            for node in icon_root), f"{icon_xml.name} lacks the FLY8 background color.")
+            except ET.ParseError as exc:
+                errors.append(f"Adaptive icon XML is invalid ({icon_xml.name}): {exc}")
 
     require('namespace = "com.fl8y.lightcloner"' in app_gradle, "Android namespace is not the FLY8 namespace.")
     require('applicationId = "com.fl8y.lightcloner"' in app_gradle, "Application ID is not the FLY8 application ID.")
