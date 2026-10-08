@@ -10,10 +10,10 @@ This matrix carries the complete acceptance scope forward. A status applies to e
 | 2 | Wireless Debugging/ADB remains primary; Shizuku is optional and independent. | PARTIAL | Separate ADB and Shizuku code paths exist. Test both with Shizuku absent/present. |
 | 3 | Apply exact dark palette: #000001, #010205, #01132A, #176E94, #01304C, #FCFDFD, #F5DADA, #626773. | PARTIAL | Color resources exist. Audit every screen and dialog for usage and contrast. |
 | 4 | Package supplied cyber-eye artwork as a proper adaptive launcher icon and use it where permitted. | MISSING | No verified launcher/adaptive icon resources are currently tracked. Add artwork/resources and inspect installed launcher appearance. |
-| 5 | Complete browse/manage, clone, launch, multi-instance and background workflow. | MISSING | Only a starter connection dashboard and a runtime contract exist. |
-| 6 | Real clone launches its application, Activity, UI and input rather than a fake task. | MISSING | Implement and prove guest process, Activity, window/surface, rendering and interaction. |
-| 7 | Use a compatible, licensed VirtualApp-style virtualization architecture. | BLOCKED | Reference map identifies engine/native clues. Evaluate exact upstream revision, license, buildability and API compatibility before integration. |
-| 8 | Support independent instances of the same package. | MISSING | Define per-instance identity, process and storage, then validate at least two actual guest instances. |
+| 5 | Complete browse/manage, clone, launch, multi-instance and background workflow. | PARTIAL | APK picker, package controls and session actions are now wired to the VirtualApp adapter; full guest runtime behavior remains unverified. |
+| 6 | Real clone launches its application, Activity, UI and input rather than a fake task. | UNVERIFIED | The adapter calls the virtual ActivityManager, but no test APK launch/render/input result has passed yet. |
+| 7 | Use a compatible, licensed VirtualApp-style virtualization architecture. | UNVERIFIED | A pinned Apache-2.0 VirtualApp-derived module is linked and has a FLY8 adapter; CI currently fails during legacy ProGuard configuration before compilation. |
+| 8 | Support independent instances of the same package. | UNVERIFIED | The adapter creates a separate VirtualApp user per instance and validates package registration in source; independent guest processes/data/tasks are not device-verified. |
 | 9 | Guest can continue operating in the background/screen-off conditions supported by the reference. | MISSING | Inspect service/lifecycle architecture; validate screen-off operation on device. |
 | 10 | Maintain appropriate Wi-Fi/network behavior when screen is off. | MISSING | Real guest networking and background/service behavior are not yet implemented or tested. |
 | 11 | Make the Wireless Debugging workflow quick and understandable. | PARTIAL | Direct settings button and manual pairing/connect dialogs exist. Match the reference workflow and test on-device. |
@@ -25,8 +25,8 @@ This matrix carries the complete acceptance scope forward. A status applies to e
 | 17 | Identify whether ID 16 is a virtual user, system user, profile or internal identifier. | UNVERIFIED | Do not assume its meaning. Trace value creation and its destination in reference and FLY8. |
 | 18 | Never fake connection, clone, process, Activity, task, pairing, running state or background state. | PARTIAL | Engine contract explicitly rejects synthetic tasks, but runtime has not been built. Audit new code against this rule. |
 | 19 | Continue the existing repository and preserve working changes. | PARTIAL | Work is being added to this repository. Review branches/history and build status before major refactors. |
-| 20 | Inspect decompiled manifest, DEX, resources, native libraries, permissions and component names. | PARTIAL | Extraction and inventory README were inspected. Actual method bodies need full JADX source analysis. |
-| 21 | Maintain feature-to-class/method/resource-to-FLY8 implementation mapping. | PARTIAL | A reference map is being created; fill in concrete exact symbols after full decompilation. |
+| 20 | Inspect decompiled manifest, DEX, resources, native libraries, permissions and component names. | PARTIAL | Manifest/resources/native libraries and component inventory are mapped; supplied pseudo-smali lacks method bodies, so JADX method-level tracing remains. |
+| 21 | Maintain feature-to-class/method/resource-to-FLY8 implementation mapping. | PARTIAL | The implementation map now records VirtualCore startup, package install, virtual-user creation and ActivityManager launch APIs; exact original-app call paths still need true method decompilation. |
 | 22 | Target 100% functional parity where technically possible; document proven platform limitations. | PARTIAL | The target is recorded; acceptance needs measured feature-by-feature results. |
 | 23 | Do not remove reference functionality to simplify Shizuku integration. | PARTIAL | Separate code paths exist. Regression tests must prove ADB still works with Shizuku unavailable. |
 | 24 | Connection UI clearly separates Wireless Debugging from optional Shizuku. | PARTIAL | Both cards exist in the starter dashboard. Refine screen flow and status/error states. |
@@ -70,16 +70,16 @@ This matrix carries the complete acceptance scope forward. A status applies to e
 | 62 | Never mask a black preview with a fake screenshot. | PARTIAL | Policy is documented. Enforce in review and session-state code. |
 | 63 | Model runtime lifecycle and independent preview availability. | PARTIAL | Data contract exists; transitions/probes are missing. |
 | 64 | Do not declare a clone dead because a thumbnail is black or missing. | PARTIAL | Intended contract exists; it needs real process/task signal integration. |
-| 65 | Inspect changes, build, test and commit coherently in the existing repository. | PARTIAL | GitHub edits exist; no build/test workflow had run at matrix creation. |
+| 65 | Inspect changes, build, test and commit coherently in the existing repository. | PARTIAL | CI successfully checked out the submodule, prepared engine source and passed the source audit; the Android build then failed because AGP 9 rejects the upstream legacy ProGuard default. A patch is committed and its next run must confirm the fix. |
 | 66 | Read decompiled source for relevant classes, JNI/native libraries, resources and permissions. | PARTIAL | Binary/resource inventory was inspected; complete Java decompile is still needed. |
-| 67 | Ensure cloned package initialization, lifecycle, rendering, input, resume and multi-instance behavior are real. | MISSING | No guest process has been launched by FLY8. |
+| 67 | Ensure cloned package initialization, lifecycle, rendering, input, resume and multi-instance behavior are real. | UNVERIFIED | Real package/launch API calls are wired, but no guest process has been launched and validated from a FLY8 build yet. |
 | 68 | Preserve resource-light package sharing and per-instance isolation. | MISSING | Engine/storage design and measurements remain. |
 | 69 | Map each Recent Apps card to real virtual Activity, process, task and guest state. | MISSING | No task integration. |
 | 70 | Meet background/AFK requirement where the device/platform permits. | MISSING | Service/process/network runtime absent and untested. |
 | 71 | Maintain primary Wireless Debugging and optional Shizuku paths with independent handling. | PARTIAL | Starter routes exist; run both-path regression tests. |
 | 72 | Detect pairing/connection failures and provide retry/cancel/timeout/cleanup behavior. | PARTIAL | Basic validation and messages exist. Add operation cancellation, timeout cleanup, and tested callbacks. |
 | 73 | Verify actual LibADB/SPAKE2 transport security, persistent keys, trusted peer and reconnect. | UNVERIFIED | Current code is a draft and has not passed a real device pair/connect cycle. |
-| 74 | Root-cause clone-start failures through user, package, process, Binder and task layers. | UNVERIFIED | No full failure stack or FLY8 runtime yet. |
+| 74 | Root-cause clone-start failures through user, package, process, Binder and task layers. | UNVERIFIED | The FLY8 adapter uses VirtualApp user/package APIs rather than constructing a shell command with --user; the original full stack trace and device reproduction are still unavailable. |
 | 75 | Build and test compatibility on Android 12 and Android 16, documenting ROM-specific differences. | UNVERIFIED | Target SDK 36 is not proof of API compatibility. |
 | 76 | Use reference → exact evidence → FLY8 implementation → runtime test → parity result; no deliberately omitted capability. | PARTIAL | This matrix and implementation map establish tracking; functional work and test results remain. |
 
