@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run deterministic source-level checks for FLY8 without building Android code."""
+"""Run deterministic FLY8 source-level invariants; no Android device is required."""
 from __future__ import annotations
 
 import sys
@@ -10,11 +10,16 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "app/src/main/AndroidManifest.xml"
 COLORS = ROOT / "app/src/main/res/values/colors.xml"
 APP_GRADLE = ROOT / "app/build.gradle.kts"
+SETTINGS = ROOT / "settings.gradle.kts"
+MODULES = ROOT / ".gitmodules"
 MAIN = ROOT / "app/src/main/java/com/fl8y/lightcloner/MainActivity.kt"
+APP_CLASS = ROOT / "app/src/main/java/com/fl8y/lightcloner/Fly8Application.kt"
 ADB = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/WirelessAdbController.kt"
 ADB_MANAGER = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/Fly8AdbManager.kt"
 SHIZUKU = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/ShizukuConnection.kt"
-ENGINE = ROOT / "app/src/main/java/com/fl8y/lightcloner/engine/VirtualizationEngine.kt"
+ENGINE_CONTRACT = ROOT / "app/src/main/java/com/fl8y/lightcloner/engine/VirtualizationEngine.kt"
+ENGINE_RUNTIME = ROOT / "app/src/main/java/com/fl8y/lightcloner/engine/Fly8VirtualRuntime.kt"
+ENGINE_ADAPTER = ROOT / "app/src/main/java/com/fl8y/lightcloner/engine/VirtualAppEngine.kt"
 MATRIX = ROOT / "docs/FEATURE_PARITY_MATRIX.md"
 MAP = ROOT / "reference/REFERENCE_IMPLEMENTATION_MAP.md"
 
@@ -51,11 +56,16 @@ def read_text(path: Path) -> str:
 
 def main() -> int:
     app_gradle = read_text(APP_GRADLE)
+    settings_source = read_text(SETTINGS)
+    modules_source = read_text(MODULES)
     main_source = read_text(MAIN)
+    app_class_source = read_text(APP_CLASS)
     adb_source = read_text(ADB)
     adb_manager_source = read_text(ADB_MANAGER)
     shizuku_source = read_text(SHIZUKU)
-    engine_source = read_text(ENGINE)
+    engine_contract = read_text(ENGINE_CONTRACT)
+    engine_runtime = read_text(ENGINE_RUNTIME)
+    engine_adapter = read_text(ENGINE_ADAPTER)
     matrix_source = read_text(MATRIX)
     map_source = read_text(MAP)
 
@@ -67,6 +77,8 @@ def main() -> int:
             if app is not None:
                 label = app.attrib.get(ANDROID_NS + "label")
                 require(label == "FLY8", f"Expected application label FLY8, got {label!r}.")
+                app_name = app.attrib.get(ANDROID_NS + "name")
+                require(app_name == ".Fly8Application", f"Expected .Fly8Application bootstrap, got {app_name!r}.")
             activity_names = {
                 node.attrib.get(ANDROID_NS + "name", "")
                 for node in manifest.findall("./application/activity")
@@ -94,36 +106,56 @@ def main() -> int:
 
     require('namespace = "com.fl8y.lightcloner"' in app_gradle, "Android namespace is not the FLY8 namespace.")
     require('applicationId = "com.fl8y.lightcloner"' in app_gradle, "Application ID is not the FLY8 application ID.")
+    require('implementation(project(":virtual-engine"))' in app_gradle, "Virtualization engine module is not linked to the app.")
     require('implementation("com.github.MuntashirAkon:libadb-android:3.1.1")' in app_gradle, "LibADB 3.1.1 dependency missing.")
     require('implementation("dev.rikka.shizuku:api:13.1.5")' in app_gradle, "Optional Shizuku API dependency missing.")
     require('implementation("dev.rikka.shizuku:provider:13.1.5")' in app_gradle, "Optional Shizuku provider dependency missing.")
+    require('include(":virtual-engine")' in settings_source, "Virtual engine project is not included by Gradle.")
+    require("f0restw0w/VirtualApp_16.git" in modules_source, "Pinned VirtualApp-derived source is not registered as a submodule.")
 
     require("Wireless Debugging" in main_source, "Dashboard lacks Wireless Debugging path.")
     require("Shizuku" in main_source, "Dashboard lacks optional Shizuku path.")
+    require("engine.createInstance(" in main_source, "Dashboard is not wired to create real virtual instances.")
+    require("engine.launch(" in main_source, "Sessions UI is not wired to the real engine launch API.")
     require("manager.pair(" in adb_source, "Pairing controller does not call the real ADB pair API.")
     require("manager.connect(" in adb_source, "ADB controller does not call direct connection API.")
     require("manager.autoConnect(" in adb_source, "ADB controller does not call discovery API.")
     require("AndroidKeyStore" in adb_manager_source, "ADB auth key is not backed by Android Keystore.")
     require("Shizuku.pingBinder()" in shizuku_source, "Shizuku bridge does not check binder availability.")
 
-    require("interface VirtualizationEngine" in engine_source, "VirtualizationEngine contract missing.")
-    if "interface VirtualizationEngine" in engine_source and "class " not in engine_source.replace("interface VirtualizationEngine", ""):
-        warnings.append("VirtualizationEngine is currently a contract only; no concrete guest runtime is implemented.")
-    else:
-        warnings.append("Inspect concrete engine state manually; source-level presence is not runtime proof.")
+    require("VirtualCore.get().startup(context)" in engine_runtime, "VirtualCore is not started from the FLY8 application lifecycle.")
+    require("VirtualCore.get().waitForEngine()" in engine_runtime, "VirtualCore Binder service startup is not requested.")
+    require("VUserManager.get().users" in engine_runtime, "Virtual user service is not checked before declaring engine ready.")
+    require("class VirtualAppEngine" in engine_adapter, "Concrete VirtualAppEngine adapter is missing.")
+    require("core.installPackage(" in engine_adapter, "Engine adapter does not call real virtual package installation.")
+    require("VActivityManager.get().startActivity(" in engine_adapter, "Engine adapter does not route launches through virtual ActivityManager.")
+    require("core.isAppRunning(" in engine_adapter, "Engine adapter does not query real virtual process liveness.")
+    require("previewAvailable = null" in engine_adapter and "taskVisible = null" in engine_adapter,
+            "Unverified task/preview state must remain unknown rather than fabricated.")
+
+    require("interface VirtualizationEngine" in engine_contract, "VirtualizationEngine contract missing.")
+    warnings.append("Source checks are not Android build or device runtime proof; guest rendering/task/background parity remains unverified.")
 
     require("| # | Acceptance requirement |" in matrix_source, "76-requirement parity matrix is missing or malformed.")
-    counted_rows = sum(1 for line in matrix_source.splitlines() if line.startswith("| ") and line.split("|")[1].strip().isdigit())
+    counted_rows = sum(
+        1 for line in matrix_source.splitlines()
+        if line.startswith("| ") and line.split("|")[1].strip().isdigit()
+    )
     require(counted_rows == 76, f"Expected 76 tracked parity rows, found {counted_rows}.")
     require("Evidence still required" in map_source, "Reference evidence ledger lacks evidence gaps.")
 
+    # Construct the forbidden label from pieces so this checker does not itself
+    # embed the full vendor label as a searchable string.
+    forbidden_brand = "Ey" + "sClone"
     for file_path in ROOT.rglob("*"):
         if not file_path.is_file() or ".git" in file_path.parts or "build" in file_path.parts:
             continue
         try:
-            file_path.read_text(encoding="utf-8")
+            source = file_path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
+        if forbidden_brand.lower() in source.lower():
+            errors.append(f"Reference vendor branding remains in {file_path.relative_to(ROOT)}.")
         if file_path.suffix.lower() in {".jks", ".keystore", ".pem", ".p12"}:
             errors.append(f"Potential secret/key material is tracked: {file_path.relative_to(ROOT)}")
 
@@ -135,7 +167,7 @@ def main() -> int:
     if errors:
         print(f"Source audit failed with {len(errors)} error(s).")
         return 1
-    print("Source audit passed. This checks repository invariants only; it does not prove Android build or runtime parity.")
+    print("Source audit passed. It checks repository invariants only; it does not prove Android build or runtime parity.")
     return 0
 
 
