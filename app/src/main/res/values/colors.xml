@@ -8,4 +8,5 @@
     <color name="fly8_text">#FCFDFD</color>
     <color name="fly8_pink">#F5DADA</color>
     <color name="fly8_muted">#626773</color>
+    <color name="fly8_icon_bg">#01132A</color>
 </resources>
