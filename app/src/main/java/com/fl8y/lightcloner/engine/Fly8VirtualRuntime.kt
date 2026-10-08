@@ -30,7 +30,7 @@ object Fly8VirtualRuntime {
         try {
             VASettings.ENABLE_IO_REDIRECT = true
             VASettings.ENABLE_INNER_SHORTCUT = false
-            VirtualCore.get().startup(context.applicationContext)
+            VirtualCore.get().startup(context)
             startupCompleted = true
             Log.i(TAG, "VirtualCore startup completed.")
         } catch (failure: Throwable) {
