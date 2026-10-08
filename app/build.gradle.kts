@@ -42,6 +42,8 @@ kotlin {
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
 
+    implementation(project(":virtual-engine"))
+
     // Real Wireless ADB transport and pairing support.
     implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
 
