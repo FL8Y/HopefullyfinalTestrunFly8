@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="fly8_background">#000001</color>
+    <color name="fly8_surface">#010205</color>
+    <color name="fly8_panel">#01132A</color>
+    <color name="fly8_primary">#176E94</color>
+    <color name="fly8_secondary">#01304C</color>
+    <color name="fly8_text">#FCFDFD</color>
+    <color name="fly8_pink">#F5DADA</color>
+    <color name="fly8_muted">#626773</color>
+</resources>
