@@ -49,7 +49,7 @@ def patch_gradle() -> bool:
     # AGP 9 rejects the legacy ProGuard default because it disables R8
     # optimization. Point the engine module to the supported optimized baseline.
     source = re.sub(
-        r"getDefaultProguardFile\\(\\s*['\\"]proguard-android\\.txt['\\"]\\s*\\)",
+        r"getDefaultProguardFile\(\s*['\"]proguard-android\.txt['\"]\s*\)",
         "getDefaultProguardFile('proguard-android-optimize.txt')",
         source,
     )
