@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -36,11 +37,15 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install Android SDK packages
         run: |
-          sdkmanager --licenses <<<'y' || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" \
+            "platforms;android-30" "build-tools;30.0.0" \
+            "ndk;21.4.7075529"
 
       - name: Run FLY8 source invariant audit
         run: python3 scripts/audit_project.py
