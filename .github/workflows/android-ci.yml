@@ -10,13 +10,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: fly8-ci-${{ github.ref }}
+  # A single stuck SDK-manager download must not block every later build.
+  # Time-bound each run; review cadence limits build commits to coherent batches.
+  group: fly8-ci-${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: true
 
 jobs:
   build-and-audit:
     name: Build, audit, and review reminders
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - name: Checkout full history for cadence checks
         uses: actions/checkout@v6
