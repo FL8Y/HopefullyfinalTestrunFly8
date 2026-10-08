@@ -31,10 +31,17 @@ class WirelessAdbController(
         val safeHost = host.trim()
         val safeCode = pairingCode.trim()
 
-        require(safeHost.isNotEmpty()) { "Host is required." }
-        require(pairingPort in 1..65535) { "Pairing port is invalid." }
-        require(safeCode.matches(Regex("\\d{6}"))) {
-            "Pairing code must contain exactly six digits."
+        if (safeHost.isEmpty()) {
+            callback.onFailure("Host is required.")
+            return
+        }
+        if (pairingPort !in 1..65535) {
+            callback.onFailure("Pairing port is invalid.")
+            return
+        }
+        if (!safeCode.matches(Regex("\\d{6}"))) {
+            callback.onFailure("Pairing code must contain exactly six digits.")
+            return
         }
 
         Thread {
@@ -51,8 +58,14 @@ class WirelessAdbController(
     fun connect(host: String, connectPort: Int) {
         val safeHost = host.trim()
 
-        require(safeHost.isNotEmpty()) { "Host is required." }
-        require(connectPort in 1..65535) { "Connection port is invalid." }
+        if (safeHost.isEmpty()) {
+            callback.onFailure("Host is required.")
+            return
+        }
+        if (connectPort !in 1..65535) {
+            callback.onFailure("Connection port is invalid.")
+            return
+        }
 
         Thread {
             try {
