@@ -1,22 +1,27 @@
 package com.fl8y.lightcloner
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
+import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
 import com.fl8y.lightcloner.connection.ShizukuConnection
+import com.fl8y.lightcloner.connection.WirelessAdbController
 import com.fl8y.lightcloner.connection.WirelessDebuggingLauncher
 
-class MainActivity : Activity() {
+class MainActivity : Activity(), WirelessAdbController.Callback {
 
     private lateinit var content: LinearLayout
     private lateinit var status: TextView
+    private lateinit var adb: WirelessAdbController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,8 +29,14 @@ class MainActivity : Activity() {
         window.statusBarColor = Color.rgb(0, 0, 1)
         window.navigationBarColor = Color.rgb(0, 0, 1)
 
+        adb = WirelessAdbController(applicationContext, this)
         setContentView(buildRoot())
         showDashboard()
+    }
+
+    override fun onDestroy() {
+        adb.close()
+        super.onDestroy()
     }
 
     private fun buildRoot(): View {
@@ -80,14 +91,26 @@ class MainActivity : Activity() {
 
         val adbCard = card()
         addCardTitle(adbCard, "Wireless Debugging")
-        addCardText(adbCard, "Primary ADB connection path. Open Android Wireless Debugging and pair this device.")
+        addCardText(
+            adbCard,
+            "Primary ADB connection. Pair with Android Wireless Debugging or reconnect to an already-paired endpoint."
+        )
         adbCard.addView(actionButton("Open Wireless Debugging") {
-            try {
+            runCatching {
                 WirelessDebuggingLauncher.open(this)
-                status.text = "Android Wireless Debugging settings opened."
-            } catch (e: Exception) {
+                status.text = "Wireless Debugging settings opened."
+            }.onFailure {
                 status.text = "Could not open Wireless Debugging settings."
             }
+        })
+        adbCard.addView(actionButton("Pair with pairing code") {
+            showPairDialog()
+        })
+        adbCard.addView(actionButton("Connect to paired device") {
+            showConnectDialog()
+        })
+        adbCard.addView(actionButton("Auto-discover paired device") {
+            adb.autoConnect()
         })
         content.addView(adbCard)
 
@@ -95,7 +118,10 @@ class MainActivity : Activity() {
 
         val shizukuCard = card()
         addCardTitle(shizukuCard, "Shizuku")
-        addCardText(shizukuCard, "Optional connection path. It does not replace Wireless Debugging.")
+        addCardText(
+            shizukuCard,
+            "Optional connection path. It does not replace Wireless Debugging / ADB."
+        )
         shizukuCard.addView(actionButton("Check Shizuku") {
             status.text = ShizukuConnection.statusText(this)
         })
@@ -109,12 +135,101 @@ class MainActivity : Activity() {
         addHeading("Virtualized Applications")
 
         val engineCard = card()
-        addCardTitle(engineCard, "Engine")
+        addCardTitle(engineCard, "Runtime")
         addCardText(
             engineCard,
-            "The runtime engine is deliberately not faked. Package, process, activity, task, and preview behavior will be wired to the real virtualization layer."
+            "The clone runtime is being integrated separately. It will use real virtual package, process, activity, and task state rather than synthetic Recent Apps cards."
         )
         content.addView(engineCard)
+    }
+
+    private fun showPairDialog() {
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(8), dp(24), 0)
+        }
+
+        val host = field("Device IP", "192.168.1.10")
+        val port = field("Pairing port", "37000")
+        val code = field("6-digit pairing code", "123456").apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+        }
+
+        form.addView(host)
+        form.addView(port)
+        form.addView(code)
+
+        AlertDialog.Builder(this)
+            .setTitle("Pair device")
+            .setView(form)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Pair") { _, _ ->
+                val p = port.text.toString().trim().toIntOrNull()
+                if (p == null) {
+                    status.text = "Pairing port is invalid."
+                    return@setPositiveButton
+                }
+                adb.pair(host.text.toString(), p, code.text.toString())
+            }
+            .show()
+    }
+
+    private fun showConnectDialog() {
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(8), dp(24), 0)
+        }
+
+        val host = field("Device IP", "192.168.1.10")
+        val port = field("Wireless ADB port", "5555")
+
+        form.addView(host)
+        form.addView(port)
+
+        AlertDialog.Builder(this)
+            .setTitle("Connect to paired device")
+            .setView(form)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Connect") { _, _ ->
+                val p = port.text.toString().trim().toIntOrNull()
+                if (p == null) {
+                    status.text = "Connection port is invalid."
+                    return@setPositiveButton
+                }
+                adb.connect(host.text.toString(), p)
+            }
+            .show()
+    }
+
+    private fun field(label: String, hint: String): EditText {
+        return EditText(this).apply {
+            contentDescription = label
+            this.hint = hint
+            setTextColor(color("FCFDFD"))
+            setHintTextColor(color("626773"))
+            textSize = 15f
+            setPadding(dp(4), dp(12), dp(4), dp(12))
+        }
+    }
+
+    override fun onStatus(message: String) {
+        status.text = message
+    }
+
+    override fun onConnected(host: String, port: Int) {
+        status.text = if (port > 0) {
+            "ADB connected to $host:$port."
+        } else {
+            "ADB connected."
+        }
+    }
+
+    override fun onPairingSucceeded(host: String, port: Int) {
+        status.text = "ADB pairing succeeded for $host:$port."
+    }
+
+    override fun onFailure(message: String, error: Throwable?) {
+        status.text = message
     }
 
     private fun showSessions() {
@@ -125,7 +240,7 @@ class MainActivity : Activity() {
         addCardTitle(empty, "No active sessions")
         addCardText(
             empty,
-            "Once the virtualization engine is integrated, real virtual processes and tasks will appear here. A black Recent Apps preview will not by itself be treated as a dead session."
+            "The runtime will report real virtual processes and tasks. A black Recent Apps preview alone will not be treated as a dead session."
         )
         content.addView(empty)
     }
@@ -137,15 +252,18 @@ class MainActivity : Activity() {
         val card = card()
         addCardTitle(card, "FLY8")
         addCardText(card, "Lightweight application virtualization and connection workspace.")
-        addCardText(card, "Version 0.1.0-dev")
-        addCardText(card, "The project keeps connection paths independent and builds runtime status around real process, activity, and task state.")
+        addCardText(card, "Version 0.2.0-dev")
+        addCardText(card, "Wireless Debugging / ADB is independent from the optional Shizuku path.")
         content.addView(card)
 
         content.addView(space(12))
 
         val notice = card()
         addCardTitle(notice, "Open-source components")
-        addCardText(notice, "Third-party notices will stay with their corresponding source and build artifacts as components are integrated.")
+        addCardText(
+            notice,
+            "FLY8 will ship required license and attribution notices for third-party components actually integrated into the build."
+        )
         content.addView(notice)
     }
 
