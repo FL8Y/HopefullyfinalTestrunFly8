@@ -302,7 +302,7 @@ class WirelessPairingService : Service() {
             }
 
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                if (discovery !== listener) {
+                if (discovery == null) {
                     Fly8Diagnostics.record("ADB pairing", "Ignored stale discovery-start failure for $serviceType.")
                     return
                 }
