@@ -47,7 +47,7 @@ The project targets SDK 36 and uses Java 17/Kotlin. The checked-in workflow:
 - runs `scripts/audit_project.py`,
 - builds the debug APK,
 - uploads the APK artifact on success,
-- runs API 31/API 36 emulator smoke checks that validate host Activity/process and VirtualCore Binder/user-service readiness, and collect logs (not guest rendering/task parity),
+- runs API 31/API 36 emulator smoke checks from a standalone POSIX shell script, validates host Activity/process and VirtualCore Binder/user-service readiness, and uploads evidence (not guest rendering/task parity),
 - emits a source/requirements reminder every 6 commits,
 - fetches the external guiding prompt as an artifact every 9 commits.
 

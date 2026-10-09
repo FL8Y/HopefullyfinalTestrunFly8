@@ -148,6 +148,11 @@ jobs:
       matrix:
         api-level: [31, 36]
     steps:
+      - name: Checkout smoke-test script
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
       - name: Download debug APK
         uses: actions/download-artifact@v4
         with:
@@ -170,47 +175,7 @@ jobs:
           emulator-boot-timeout: 600
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            set -u
-            mkdir -p build/emulator-smoke
-            activity_log="build/emulator-smoke/activities-api-${{ matrix.api-level }}.txt"
-            runtime_log="build/emulator-smoke/runtime-api-${{ matrix.api-level }}.log"
-            start_log="build/emulator-smoke/start-api-${{ matrix.api-level }}.txt"
-
-            if ! adb install -r build/apk/app-debug.apk; then
-              adb logcat -d > "$runtime_log" || true
-              echo "APK installation failed on API ${{ matrix.api-level }}." >> "$GITHUB_STEP_SUMMARY"
-              exit 1
-            fi
-            adb logcat -c || true
-            start_output="$(adb shell am start -W -n com.fl8y.lightcloner/.MainActivity 2>&1)"
-            start_result=$?
-            printf '%s\n' "$start_output" > "$start_log"
-            sleep 15
-            app_pid="$(adb shell pidof com.fl8y.lightcloner 2>/dev/null | tr -d '\r' || true)"
-            adb shell dumpsys activity activities > "$activity_log" 2>&1 || true
-            adb logcat -d -s AndroidRuntime:E FLY8.VirtualRuntime:I FLY8.VirtualAppEngine:V FLY8.Diagnostics:V > "$runtime_log" 2>&1 || adb logcat -d > "$runtime_log"
-
-            if [ "$start_result" -ne 0 ] || [ -z "$app_pid" ]; then
-              echo "API ${{ matrix.api-level }}: FLY8 host process did not remain alive after launch." >> "$GITHUB_STEP_SUMMARY"
-              cat "$start_log" "$runtime_log"
-              exit 1
-            fi
-            if ! grep -E 'mResumedActivity|topResumedActivity' "$activity_log" | grep -q 'com.fl8y.lightcloner'; then
-              echo "API ${{ matrix.api-level }}: FLY8 MainActivity was not found as the resumed Activity." >> "$GITHUB_STEP_SUMMARY"
-              cat "$activity_log" "$runtime_log"
-              exit 1
-            fi
-            if grep -q 'FATAL EXCEPTION' "$runtime_log"; then
-              cat "$runtime_log"
-              exit 1
-            fi
-            if ! grep -q 'Virtual service answered; virtual-user count=' "$runtime_log"; then
-              echo "API ${{ matrix.api-level }}: host Activity is alive, but VirtualCore did not confirm Binder/user-service readiness." >> "$GITHUB_STEP_SUMMARY"
-              cat "$start_log" "$runtime_log"
-              exit 1
-            fi
-            echo "API ${{ matrix.api-level }}: host Activity/process and VirtualCore Binder/user-service readiness passed. This still does not prove guest UI/render/task/AFK parity." >> "$GITHUB_STEP_SUMMARY"
+          script: sh .github/scripts/emulator-smoke.sh ${{ matrix.api-level }}
 
       - name: Upload emulator smoke evidence
         if: always()

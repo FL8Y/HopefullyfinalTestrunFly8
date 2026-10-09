@@ -17,6 +17,7 @@ SETTINGS = ROOT / "settings.gradle.kts"
 ENGINE_GRADLE = ROOT / "vendor/virtualapp16/lib/build.gradle"
 MODULES = ROOT / ".gitmodules"
 MAIN = ROOT / "app/src/main/java/com/fl8y/lightcloner/MainActivity.kt"
+SMOKE_TEST = ROOT / ".github/scripts/emulator-smoke.sh"
 DIAGNOSTICS = ROOT / "app/src/main/java/com/fl8y/lightcloner/Fly8Diagnostics.kt"
 APP_CLASS = ROOT / "app/src/main/java/com/fl8y/lightcloner/Fly8Application.kt"
 ADB = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/WirelessAdbController.kt"
@@ -67,6 +68,7 @@ def main() -> int:
     engine_gradle_source = read_text(ENGINE_GRADLE)
     modules_source = read_text(MODULES)
     main_source = read_text(MAIN)
+    smoke_source = read_text(SMOKE_TEST)
     diagnostics_source = read_text(DIAGNOSTICS)
     app_class_source = read_text(APP_CLASS)
     adb_source = read_text(ADB)
@@ -188,6 +190,11 @@ def main() -> int:
             "About screen must provide diagnostic log viewing and copy controls.")
     require("Fly8Diagnostics.record" in adb_source and "Fly8Diagnostics.record" in engine_runtime and "Fly8Diagnostics.record" in engine_adapter,
             "ADB, virtual-service startup and guest lifecycle must record diagnostic events.")
+    require(smoke_source.startswith("#!/bin/sh"), "Emulator smoke test must be a standalone POSIX shell script.")
+    require("Virtual service answered; virtual-user count=" in smoke_source,
+            "Emulator smoke test must require real VirtualCore Binder/user-service readiness.")
+    require("mResumedActivity" in smoke_source and "com.fl8y.lightcloner" in smoke_source,
+            "Emulator smoke test must verify the actual FLY8 host Activity is resumed.")
     require("interface VirtualizationEngine" in engine_contract, "VirtualizationEngine contract missing.")
     warnings.append("Source checks are not Android build or device runtime proof; guest rendering/task/background parity remains unverified.")
 
