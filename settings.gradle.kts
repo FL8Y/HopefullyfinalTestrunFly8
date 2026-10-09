@@ -15,6 +15,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Legacy hook/runtime artifacts removed from JCenter are mirrored here.
+        maven { url = uri("https://artifactory.appodeal.com/appodeal-public") }
         maven { url = uri("https://jitpack.io") }
     }
 }
