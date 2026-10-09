@@ -2,8 +2,9 @@
 """Apply small, repeatable FLY8 integration patches to the pinned engine submodule.
 
 The upstream code remains in its pinned submodule. These changes adapt its old
-Gradle metadata to the FLY8 Android build and move virtual shared storage into
-the host app's scoped files area so the host does not need all-files access.
+Gradle metadata to the FLY8 Android build, restore access to retired JCenter
+artifacts through a verified public mirror, and move virtual shared storage into
+the host app's scoped files area so the host does not need broad all-files access.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINE = ROOT / "vendor/virtualapp16/lib"
 GRADLE_FILE = ENGINE / "build.gradle"
 ENVIRONMENT_FILE = ENGINE / "src/main/java/com/lody/virtual/os/VEnvironment.java"
+LEGACY_MAVEN_MIRROR = "https://artifactory.appodeal.com/appodeal-public"
 
 
 def require_file(path: Path) -> str:
@@ -54,13 +56,28 @@ def patch_gradle() -> bool:
         source,
     )
 
-    # Gradle 9 removed RepositoryHandler.jcenter(). Maven Central is already
-    # declared by this upstream module; preserve JitPack and Google Maven.
+    # Gradle 9 removed RepositoryHandler.jcenter(). Keep the dependency graph
+    # intact and resolve the old JCenter-only hook artifacts from a public mirror.
     source = re.sub(
         r"(?m)^\s*jcenter\(\)\s*$",
-        "    // jcenter() retired; Maven Central is declared below.",
+        "    // jcenter() retired; legacy artifacts use the public Appodeal mirror.",
         source,
     )
+    if LEGACY_MAVEN_MIRROR not in source:
+        repositories_match = re.search(r"(?m)^repositories\s*\{", source)
+        if not repositories_match:
+            source += (
+                "\nrepositories {\n"
+                f"    maven {{ url '{LEGACY_MAVEN_MIRROR}' }}\n"
+                "}\n"
+            )
+        else:
+            insert_at = repositories_match.end()
+            source = (
+                source[:insert_at]
+                + f"\n    maven {{ url '{LEGACY_MAVEN_MIRROR}' }}"
+                + source[insert_at:]
+            )
 
     if source != original:
         GRADLE_FILE.write_text(source, encoding="utf-8")
