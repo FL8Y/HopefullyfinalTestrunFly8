@@ -1,6 +1,8 @@
 package com.fl8y.lightcloner
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.ClipData
@@ -8,6 +10,7 @@ import android.content.ClipboardManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
@@ -23,6 +26,8 @@ import android.widget.TextView
 import com.fl8y.lightcloner.connection.ShizukuConnection
 import com.fl8y.lightcloner.connection.WirelessAdbController
 import com.fl8y.lightcloner.connection.WirelessDebuggingLauncher
+import com.fl8y.lightcloner.connection.WirelessPairingService
+import androidx.core.content.ContextCompat
 import com.fl8y.lightcloner.engine.ClonePackage
 import com.fl8y.lightcloner.engine.CloneSession
 import com.fl8y.lightcloner.engine.VirtualAppEngine
@@ -47,6 +52,19 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
     private var lastStatus = "Starting FLY8…"
     private var packages: List<ClonePackage> = emptyList()
     private var sessions: List<CloneSession> = emptyList()
+    private var waitingForNotificationPermission = false
+
+    private val pairingStatusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            if (intent?.action != WirelessPairingService.ACTION_STATUS) return
+            val message = intent.getStringExtra(WirelessPairingService.EXTRA_STATUS) ?: return
+            setStatus(message)
+            Fly8Diagnostics.record(
+                "ADB",
+                "Pairing notification reported state: ${message.take(180)}",
+            )
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,6 +73,12 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
 
         adb = WirelessAdbController(applicationContext, this)
         engine = VirtualAppEngine(applicationContext)
+        ContextCompat.registerReceiver(
+            this,
+            pairingStatusReceiver,
+            IntentFilter(WirelessPairingService.ACTION_STATUS),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
 
         setContentView(buildRoot())
         showDashboard()
@@ -62,7 +86,9 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
     }
 
     override fun onDestroy() {
-        adb.close()
+        runCatching { unregisterReceiver(pairingStatusReceiver) }
+        // Do not close the shared ADB transport here. Android Settings may recreate the
+        // Activity while the pairing foreground service is keeping the connection alive.
         io.shutdownNow()
         super.onDestroy()
     }
@@ -114,7 +140,8 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
             adbCard,
             "Primary ADB connection. Pair with Android Wireless Debugging or reconnect to an already-paired endpoint."
         )
-        adbCard.addView(actionButton("Open Wireless Debugging") {
+        adbCard.addView(actionButton("Connect via Wireless Debugging") { beginWirelessPairing() })
+        adbCard.addView(actionButton("Open Wireless Debugging settings") {
             runCatching {
                 WirelessDebuggingLauncher.open(this)
                 setStatus("Wireless Debugging settings opened.")
@@ -122,7 +149,7 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
                 setStatus("Could not open Wireless Debugging settings: ${it.message}")
             }
         })
-        adbCard.addView(actionButton("Pair with pairing code") { showPairDialog() })
+        adbCard.addView(actionButton("Manual pairing fallback") { showPairDialog() })
         adbCard.addView(actionButton("Connect to paired device") { showConnectDialog() })
         adbCard.addView(actionButton("Auto-discover paired device") { adb.autoConnect() })
         content.addView(adbCard)
@@ -390,6 +417,49 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
         }
     }
 
+
+    private fun beginWirelessPairing() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            waitingForNotificationPermission = true
+            requestPermissions(
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                REQUEST_POST_NOTIFICATIONS,
+            )
+            setStatus("Allow FLY8 notifications so the pairing-code prompt can appear over Android Settings.")
+            return
+        }
+
+        try {
+            val serviceIntent = Intent(this, WirelessPairingService::class.java)
+                .setAction(WirelessPairingService.ACTION_START)
+            ContextCompat.startForegroundService(this, serviceIntent)
+            setStatus("Finding wireless debugging pairing service… Open Wireless Debugging, then tap Pair device with pairing code.")
+            Fly8Diagnostics.record("ADB", "Starting foreground pairing discovery before opening Android Wireless Debugging.")
+            WirelessDebuggingLauncher.open(this)
+        } catch (error: Exception) {
+            setStatus("Could not start wireless pairing: ${error.message ?: error.javaClass.simpleName}")
+            Fly8Diagnostics.record("ADB", "Could not start notification-led pairing flow.", error)
+        }
+    }
+
+    @Deprecated("Uses the compatible runtime-permission callback API for this host.")
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_POST_NOTIFICATIONS || !waitingForNotificationPermission) return
+        waitingForNotificationPermission = false
+        if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            beginWirelessPairing()
+        } else {
+            setStatus("Notifications are required for the pairing-code prompt. You can still use Manual pairing fallback.")
+        }
+    }
+
     private fun showPairDialog() {
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -561,5 +631,6 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
     companion object {
         private const val TAG = "FLY8.MainActivity"
         private const val REQUEST_PICK_APK = 0xF801
+        private const val REQUEST_POST_NOTIFICATIONS = 0xF802
     }
 }

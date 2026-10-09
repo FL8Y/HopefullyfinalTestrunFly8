@@ -18,12 +18,12 @@ No Android device is attached to this workspace, so all hardware/runtime rows re
 ## Wireless Debugging / ADB
 
 1. Test with Shizuku not installed or stopped.
-2. Open the direct Wireless Debugging shortcut, with fallback to Developer Options.
-3. Pair using the exact IP/port shown by Android and the six-digit code.
-4. Verify actual pairing result, not just a UI message.
-5. Connect to the ADB endpoint, verify actual authenticated connection state and run a harmless diagnostic service call.
+2. Tap **Connect via Wireless Debugging**; allow notifications when requested. FLY8 must start its foreground discovery service before opening Android Wireless Debugging.
+3. In Android Settings, open **Pair device with pairing code**. Verify the FLY8 notification changes from “Finding wireless debugging pairing service…” to a notification with inline six-digit code entry.
+4. Submit the code from the notification. Verify the real LibADB pairing handshake, then separately discover `_adb-tls-connect._tcp` and connect to the matching host.
+5. Verify connected state using `AbsAdbConnectionManager.isConnected()` and run a harmless diagnostic service call. Check notification state and diagnostics without logging the code.
 6. Test wrong code, wrong port, expired pairing, network change, cancellation, timeout and already-paired state.
-7. Disconnect/reconnect and verify the Android Keystore identity survives an Activity recreation.
+7. Use the notification Disconnect action, then retry; verify the Android Keystore identity survives Activity recreation and the connected-device foreground service is not accidentally torn down when Settings recreates the Activity.
 8. Test mDNS discovery, multicast behavior and cleanup.
 9. Confirm no pairing codes, private keys or authentication payloads enter logs.
 10. Repeat on Android 12 and Android 16 where available.

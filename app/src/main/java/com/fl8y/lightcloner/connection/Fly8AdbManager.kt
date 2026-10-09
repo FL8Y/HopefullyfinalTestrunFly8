@@ -19,7 +19,7 @@ import javax.security.auth.x500.X500Principal
  * Wireless debugging and Shizuku are separate paths:
  * this class owns only the ADB path.
  */
-class Fly8AdbManager(context: Context) : AbsAdbConnectionManager() {
+class Fly8AdbManager private constructor(context: Context) : AbsAdbConnectionManager() {
 
     private val appContext = context.applicationContext
     private val alias = "fly8-adb-auth-v1"
@@ -91,4 +91,19 @@ class Fly8AdbManager(context: Context) : AbsAdbConnectionManager() {
         val private: PrivateKey,
         val certificate: Certificate,
     )
+
+    companion object {
+        @Volatile
+        private var shared: Fly8AdbManager? = null
+
+        /**
+         * Pairing is performed by the foreground pairing service while the Activity may be
+         * showing Android Settings. Share one manager so the paired ADB transport is retained.
+         */
+        fun get(context: Context): Fly8AdbManager {
+            return shared ?: synchronized(this) {
+                shared ?: Fly8AdbManager(context.applicationContext).also { shared = it }
+            }
+        }
+    }
 }

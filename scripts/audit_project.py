@@ -22,6 +22,7 @@ DIAGNOSTICS = ROOT / "app/src/main/java/com/fl8y/lightcloner/Fly8Diagnostics.kt"
 APP_CLASS = ROOT / "app/src/main/java/com/fl8y/lightcloner/Fly8Application.kt"
 ADB = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/WirelessAdbController.kt"
 ADB_MANAGER = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/Fly8AdbManager.kt"
+PAIRING_SERVICE = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/WirelessPairingService.kt"
 SHIZUKU = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/ShizukuConnection.kt"
 ENGINE_CONTRACT = ROOT / "app/src/main/java/com/fl8y/lightcloner/engine/VirtualizationEngine.kt"
 ENGINE_RUNTIME = ROOT / "app/src/main/java/com/fl8y/lightcloner/engine/Fly8VirtualRuntime.kt"
@@ -171,6 +172,27 @@ def main() -> int:
     require("manager.connect(" in adb_source, "ADB controller does not call direct connection API.")
     require("manager.autoConnect(" in adb_source, "ADB controller does not call discovery API.")
     require("AndroidKeyStore" in adb_manager_source, "ADB auth key is not backed by Android Keystore.")
+    require("Fly8AdbManager.get(applicationContext)" in pairing_service_source,
+            "Pairing service must share the app's persistent ADB manager.")
+    require('" _adb-tls-pairing._tcp"' not in pairing_service_source and '"_adb-tls-pairing._tcp"' in pairing_service_source,
+            "Pairing discovery must target Android's dedicated TLS pairing mDNS service.")
+    require('"_adb-tls-connect._tcp"' in pairing_service_source,
+            "Pairing flow must separately discover the normal authenticated ADB endpoint.")
+    require("RemoteInput.Builder(KEY_PAIRING_CODE)" in pairing_service_source,
+            "Pairing notification lacks inline pairing-code entry.")
+    require("ACTION_SUBMIT_CODE" in pairing_service_source and "adb.pair(host, port, code)" in pairing_service_source,
+            "Notification code submission must call real LibADB pairing.")
+    require("adb.isConnected" in pairing_service_source,
+            "Connected status must be based on the ADB manager's actual connection state.")
+    require("android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" in manifest_source,
+            "Notification-led pairing service requires connectedDevice foreground-service permission.")
+    require('android:name=".connection.WirelessPairingService"' in manifest_source and
+            'android:foregroundServiceType="connectedDevice"' in manifest_source,
+            "Notification-led pairing service is not declared with its foreground service type.")
+    require("POST_NOTIFICATIONS" in manifest_source,
+            "Android 13+ notification permission must be declared.")
+    require("beginWirelessPairing()" in main_source and "WirelessPairingService.ACTION_START" in main_source,
+            "Dashboard does not offer the streamlined notification-led pairing flow.")
     require("Shizuku.pingBinder()" in shizuku_source, "Shizuku bridge does not check binder availability.")
 
     require("VirtualCore.get().startup(context)" in engine_runtime, "VirtualCore is not started from the FLY8 application lifecycle.")
