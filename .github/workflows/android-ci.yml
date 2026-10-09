@@ -10,8 +10,6 @@ permissions:
   contents: read
 
 concurrency:
-  # A single stuck SDK-manager download must not block every later build.
-  # Time-bound each run; review cadence limits build commits to coherent batches.
   group: fly8-ci-${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: true
 
@@ -66,13 +64,8 @@ jobs:
 
           memory_due=false
           blueprint_due=false
-          if (( count > 0 && count % 6 == 0 )); then
-            memory_due=true
-          fi
-          if (( count > 0 && count % 9 == 0 )); then
-            blueprint_due=true
-          fi
-
+          if (( count > 0 && count % 6 == 0 )); then memory_due=true; fi
+          if (( count > 0 && count % 9 == 0 )); then blueprint_due=true; fi
           echo "memory_review_due=$memory_due" >> "$GITHUB_OUTPUT"
           echo "blueprint_refresh_due=$blueprint_due" >> "$GITHUB_OUTPUT"
 
@@ -83,40 +76,52 @@ jobs:
             echo "- Six-commit source/memory review due: **$memory_due**"
             echo "- Nine-commit guide refresh due: **$blueprint_due**"
             echo ""
-            echo "A reminder is not a substitute for reading the guide, reviewing recent diffs, or validating the actual runtime."
+            echo "Reminder only: read the source, inspect recent diffs, review the matrix and validate runtime behavior."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Six-commit source and requirements review reminder
+      - name: Six-commit guide and memory review checkpoint
         if: steps.cadence.outputs.memory_review_due == 'true'
         run: |
+          set -euo pipefail
+          mkdir -p build/review
+          curl --fail --location --silent --show-error             "https://raw.githubusercontent.com/FL8Y/readthischatgpt/main/here%20is%20your%20guiding%20prompt"             --output build/review/guiding-prompt-six-commit.txt
+          test -s build/review/guiding-prompt-six-commit.txt
+          test "$(grep -Ec '^#{1,3} ' build/review/guiding-prompt-six-commit.txt)" -ge 70
           {
-            echo "## REQUIRED REVIEW CHECKPOINT"
+            echo "## REQUIRED SIX-COMMIT REVIEW"
             echo ""
-            echo "Review the guide repository, development protocol, all 76 acceptance rows, reference implementation map, last six commits, and this workflow/build result."
-            echo "Resolve any mismatch before beginning another subsystem. Check for missing features, invented success states, brand leakage, and license gaps."
+            echo "The complete external guide was fetched. Read the artifact, all 76 matrix rows, the reference map, the last six diffs, and the latest Actions failure details before further architecture changes."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Refresh guide prompt on nine-commit checkpoint
+      - name: Upload six-commit review guide
+        if: steps.cadence.outputs.memory_review_due == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly8-six-commit-review-guide
+          path: build/review/guiding-prompt-six-commit.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Nine-commit full blueprint refresh
         if: steps.cadence.outputs.blueprint_refresh_due == 'true'
         run: |
           set -euo pipefail
           mkdir -p build/review
-          curl --fail --location --silent --show-error \
-            "https://raw.githubusercontent.com/FL8Y/readthischatgpt/main/here%20is%20your%20guiding%20prompt" \
-            --output "build/review/guiding-prompt.txt"
-          test -s "build/review/guiding-prompt.txt"
+          curl --fail --location --silent --show-error             "https://raw.githubusercontent.com/FL8Y/readthischatgpt/main/here%20is%20your%20guiding%20prompt"             --output build/review/guiding-prompt-nine-commit.txt
+          test -s build/review/guiding-prompt-nine-commit.txt
+          test "$(grep -Ec '^#{1,3} ' build/review/guiding-prompt-nine-commit.txt)" -ge 70
           {
-            echo "## Guide refresh"
+            echo "## REQUIRED NINE-COMMIT BLUEPRINT REFRESH"
             echo ""
-            echo "The current guide was fetched as an artifact because the nine-commit refresh checkpoint is due. Read the artifact before major architecture work."
+            echo "Read the full guide artifact before starting new architecture work. Compare every row in the 76-item matrix against current code and test evidence."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload refreshed guide prompt
+      - name: Upload nine-commit blueprint
         if: steps.cadence.outputs.blueprint_refresh_due == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: fly8-guiding-prompt-checkpoint
-          path: build/review/guiding-prompt.txt
+          name: fly8-nine-commit-blueprint
+          path: build/review/guiding-prompt-nine-commit.txt
           if-no-files-found: error
           retention-days: 30
 
