@@ -44,6 +44,7 @@ class WirelessPairingService : Service() {
     private var phase = Phase.FINDING_PAIRING
     private var discoveryStartedAt = 0L
     private var resolveInFlight = false
+    private var phaseTimeout: Runnable? = null
 
     private enum class Phase { FINDING_PAIRING, ENTER_CODE, PAIRING, FINDING_CONNECT, CONNECTING, CONNECTED, FAILED }
 
@@ -84,6 +85,10 @@ class WirelessPairingService : Service() {
                 if (phase == Phase.FINDING_PAIRING || phase == Phase.FAILED) {
                     phase = Phase.FINDING_PAIRING
                     discoveryStartedAt = SystemClock.elapsedRealtime()
+                    schedulePhaseTimeout(
+                        Phase.FINDING_PAIRING, PAIRING_DISCOVERY_TIMEOUT_MS,
+                        "Timed out waiting for the pairing service. Reopen “Pair device with pairing code” and try again.",
+                    )
                     publishStatus("Finding wireless debugging pairing service…", false)
                     startDiscovery(SERVICE_PAIRING)
                 }
@@ -250,6 +255,10 @@ class WirelessPairingService : Service() {
                                 pairingHost = host
                                 pairingPort = port
                                 phase = Phase.ENTER_CODE
+                                schedulePhaseTimeout(
+                                    Phase.ENTER_CODE, CODE_ENTRY_TIMEOUT_MS,
+                                    "Pairing code entry expired. Reopen “Pair device with pairing code” and use the FLY8 notification.",
+                                )
                                 Fly8Diagnostics.record("ADB pairing", "Pairing endpoint found on port $port; code is not logged.")
                                 updateNotification(
                                     "Pairing service found · enter the six-digit code from Android Settings.",
@@ -277,6 +286,10 @@ class WirelessPairingService : Service() {
             override fun onServiceLost(info: NsdServiceInfo) {
                 if (phase == Phase.ENTER_CODE) {
                     phase = Phase.FINDING_PAIRING
+                    schedulePhaseTimeout(
+                        Phase.FINDING_PAIRING, PAIRING_DISCOVERY_TIMEOUT_MS,
+                        "Timed out waiting for the pairing service. Reopen “Pair device with pairing code” and try again.",
+                    )
                     updateNotification("Pairing service disappeared. Reopen Pair device with pairing code and try again.")
                     publishStatus("Pairing service disappeared; reopen the pairing-code screen.", false)
                 }
@@ -288,6 +301,7 @@ class WirelessPairingService : Service() {
 
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
                 discovery = null
+                clearPhaseTimeout()
                 phase = Phase.FAILED
                 val message = "Could not start wireless debugging discovery (error $errorCode). Check Wi-Fi and try again."
                 Fly8Diagnostics.record("ADB pairing", message)
@@ -304,12 +318,31 @@ class WirelessPairingService : Service() {
             manager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
         } catch (error: Exception) {
             discovery = null
+            clearPhaseTimeout()
             phase = Phase.FAILED
             val message = "Wireless debugging discovery failed: ${error.message ?: error.javaClass.simpleName}"
             Fly8Diagnostics.record("ADB pairing", message, error)
             updateNotification(message)
             publishStatus(message, false)
         }
+    }
+
+    private fun schedulePhaseTimeout(expected: Phase, timeoutMs: Long, message: String) {
+        clearPhaseTimeout()
+        val timeout = Runnable {
+            if (phase != expected) return@Runnable
+            Fly8Diagnostics.record("ADB pairing", "Timed out in phase ${expected.name}.")
+            phaseTimeout = null
+            fail(message)
+            publishStatus(message, false)
+        }
+        phaseTimeout = timeout
+        main.postDelayed(timeout, timeoutMs)
+    }
+
+    private fun clearPhaseTimeout() {
+        phaseTimeout?.let(main::removeCallbacks)
+        phaseTimeout = null
     }
 
     private fun stopDiscovery() {
@@ -335,6 +368,7 @@ class WirelessPairingService : Service() {
             publishStatus("Pairing code must contain six digits.", false)
             return
         }
+        clearPhaseTimeout()
         phase = Phase.PAIRING
         stopDiscovery()
         updateNotification("Authenticating the pairing code…")
@@ -346,6 +380,10 @@ class WirelessPairingService : Service() {
                 pairedHost = host
                 main.post {
                     phase = Phase.FINDING_CONNECT
+                    schedulePhaseTimeout(
+                        Phase.FINDING_CONNECT, CONNECT_DISCOVERY_TIMEOUT_MS,
+                        "Pairing succeeded, but the normal ADB service was not found in time. Reopen Wireless Debugging and retry.",
+                    )
                     updateNotification("Paired. Finding the authenticated ADB connection service…")
                     publishStatus("Pairing succeeded. Finding the normal ADB connection endpoint…", false)
                     startDiscovery(SERVICE_CONNECT)
@@ -359,11 +397,16 @@ class WirelessPairingService : Service() {
 
     private fun startConnectDiscovery() {
         phase = Phase.FINDING_CONNECT
+        schedulePhaseTimeout(
+            Phase.FINDING_CONNECT, CONNECT_DISCOVERY_TIMEOUT_MS,
+            "Could not find the normal ADB service in time. Reopen Wireless Debugging and retry.",
+        )
         updateNotification("Finding the authenticated ADB connection service…")
         startDiscovery(SERVICE_CONNECT)
     }
 
     private fun connectTo(host: String, port: Int) {
+        clearPhaseTimeout()
         phase = Phase.CONNECTING
         updateNotification("Connecting securely to wireless ADB…")
         publishStatus("Connecting securely to $host:$port…", false)
@@ -374,6 +417,7 @@ class WirelessPairingService : Service() {
                     throw IOException("The ADB connection did not reach an authenticated connected state.")
                 }
                 main.post {
+                    clearPhaseTimeout()
                     phase = Phase.CONNECTED
                     val message = "Wireless ADB connected to $host:$port."
                     Fly8Diagnostics.record("ADB pairing", "Authenticated ADB connection verified on port $port.")
@@ -384,6 +428,7 @@ class WirelessPairingService : Service() {
                 Fly8Diagnostics.record("ADB pairing", "Authenticated ADB connection failed.", error)
                 main.post {
                     pairedHost = host
+                    clearPhaseTimeout()
                     phase = Phase.FAILED
                     val message = "Paired, but connection failed: ${connectionMessage(error)}"
                     updateNotification(message)
@@ -394,6 +439,8 @@ class WirelessPairingService : Service() {
     }
 
     private fun fail(message: String) {
+        clearPhaseTimeout()
+        stopDiscovery()
         phase = Phase.FAILED
         Fly8Diagnostics.record("ADB pairing", message)
         updateNotification(message)
@@ -422,6 +469,7 @@ class WirelessPairingService : Service() {
     }
 
     private fun stopWorkflow() {
+        clearPhaseTimeout()
         stopDiscovery()
         if (foregroundStarted) {
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -431,6 +479,7 @@ class WirelessPairingService : Service() {
     }
 
     override fun onDestroy() {
+        clearPhaseTimeout()
         stopDiscovery()
         worker.shutdownNow()
         if (phase != Phase.CONNECTED) runCatching { adb.disconnect() }
@@ -463,5 +512,8 @@ class WirelessPairingService : Service() {
         private const val REQUEST_SUBMIT_CODE = 8045
         private const val REQUEST_DISCONNECT = 8046
         private const val REQUEST_RETRY = 8047
+        private const val PAIRING_DISCOVERY_TIMEOUT_MS = 180_000L
+        private const val CODE_ENTRY_TIMEOUT_MS = 120_000L
+        private const val CONNECT_DISCOVERY_TIMEOUT_MS = 30_000L
     }
 }

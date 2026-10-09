@@ -21,7 +21,8 @@ No Android device is attached to this workspace, so all hardware/runtime rows re
 2. Tap **Connect via Wireless Debugging**; allow notifications when requested. FLY8 must start its foreground discovery service before opening Android Wireless Debugging. CI also checks that the foreground notification is observable on API 31/API 36, but that does not simulate a phone pairing endpoint.
 3. In Android Settings, open **Pair device with pairing code**. Verify the FLY8 notification changes from “Finding wireless debugging pairing service…” to a notification with inline six-digit code entry.
 4. Submit the code from the notification. Verify the real LibADB pairing handshake, then separately discover `_adb-tls-connect._tcp` and connect to the matching host.
-5. Verify connected state using `AbsAdbConnectionManager.isConnected()` and run a harmless diagnostic service call. Check notification state and diagnostics without logging the code.
+5. Verify connected state using `AbsAdbConnectionManager.isConnected()` and run a harmless diagnostic service call.
+6. Verify the 180-second pairing-discovery timeout, 120-second code-entry expiration and 30-second post-pair service timeout each stop discovery, update the notification and allow retry/cancel. Check notification state and diagnostics without logging the code.
 6. Test wrong code, wrong port, expired pairing, network change, cancellation, timeout and already-paired state.
 7. Use the notification Disconnect action, then retry; verify the Android Keystore identity survives Activity recreation and the connected-device foreground service is not accidentally torn down when Settings recreates the Activity.
 8. Test mDNS discovery, multicast behavior and cleanup.
