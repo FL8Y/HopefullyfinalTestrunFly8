@@ -169,7 +169,7 @@ def main() -> int:
             "Unverified task/preview state must remain unknown rather than fabricated.")
 
     require("MAX_ENTRIES = 300" in diagnostics_source, "Bounded diagnostics buffer must stay capped at 300 entries.")
-    require("Authentication codes and private keys must never be passed to record()" in diagnostics_source,
+    require("Pairing codes and private keys must never be passed to record()" in diagnostics_source,
             "Diagnostics must document the exclusion of pairing codes and private keys.")
     require("View diagnostic log" in main_source and "Copy diagnostic log" in main_source,
             "About screen must provide diagnostic log viewing and copy controls.")

@@ -53,6 +53,7 @@ jobs:
         run: python3 scripts/audit_project.py
 
       - name: Compute commit review cadence
+        if: always()
         id: cadence
         shell: bash
         run: |
@@ -80,7 +81,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Six-commit guide and memory review checkpoint
-        if: steps.cadence.outputs.memory_review_due == 'true'
+        if: always() && steps.cadence.outputs.memory_review_due == 'true'
         run: |
           set -euo pipefail
           mkdir -p build/review
@@ -94,7 +95,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload six-commit review guide
-        if: steps.cadence.outputs.memory_review_due == 'true'
+        if: always() && steps.cadence.outputs.memory_review_due == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: fly8-six-commit-review-guide
@@ -103,7 +104,7 @@ jobs:
           retention-days: 30
 
       - name: Nine-commit full blueprint refresh
-        if: steps.cadence.outputs.blueprint_refresh_due == 'true'
+        if: always() && steps.cadence.outputs.blueprint_refresh_due == 'true'
         run: |
           set -euo pipefail
           mkdir -p build/review
@@ -117,7 +118,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload nine-commit blueprint
-        if: steps.cadence.outputs.blueprint_refresh_due == 'true'
+        if: always() && steps.cadence.outputs.blueprint_refresh_due == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: fly8-nine-commit-blueprint
