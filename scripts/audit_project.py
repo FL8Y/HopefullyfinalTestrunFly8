@@ -28,6 +28,7 @@ MATRIX = ROOT / "docs/FEATURE_PARITY_MATRIX.md"
 MAP = ROOT / "reference/REFERENCE_IMPLEMENTATION_MAP.md"
 
 ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
+TOOLS_NS = "{http://schemas.android.com/tools}"
 EXPECTED_COLORS = {
     "fly8_background": "#000001",
     "fly8_surface": "#010205",
@@ -83,6 +84,10 @@ def main() -> int:
             if app is not None:
                 label = app.attrib.get(ANDROID_NS + "label")
                 require(label == "FLY8", f"Expected application label FLY8, got {label!r}.")
+                require(app.attrib.get(ANDROID_NS + "allowBackup") == "false",
+                        "Host application backup must remain disabled for virtualized app data.")
+                require(app.attrib.get(TOOLS_NS + "replace") == "android:allowBackup,android:label",
+                        "Manifest must explicitly resolve dependency conflicts for FLY8 label/backup attributes.")
                 app_name = app.attrib.get(ANDROID_NS + "name")
                 require(app_name == ".Fly8Application", f"Expected .Fly8Application bootstrap, got {app_name!r}.")
                 require(app.attrib.get(ANDROID_NS + "icon") == "@mipmap/ic_launcher", "Manifest launcher icon must reference @mipmap/ic_launcher.")
