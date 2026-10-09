@@ -40,6 +40,26 @@ def patch_gradle() -> bool:
         insertion = android_match.end()
         source = source[:insertion] + "\n    namespace 'com.lody.virtual'\n" + source[insertion:]
 
+    # AGP 9 disables AIDL code generation unless the feature is explicitly
+    # enabled. The engine depends on generated Binder interfaces throughout
+    # its service and package/activity manager implementation.
+    aidl_features = re.search(r"(?s)buildFeatures\s*\{([^}]*)\}", source)
+    aidl_is_enabled = bool(
+        aidl_features and re.search(r"\baidl\s*(?:=\s*)?true\b", aidl_features.group(1))
+    )
+    if not aidl_is_enabled:
+        if aidl_features:
+            block_end = source.find("}", aidl_features.start())
+            if block_end < 0:
+                raise RuntimeError("Could not find the end of the engine buildFeatures block.")
+            source = source[:block_end] + "\n        aidl = true\n    " + source[block_end:]
+        else:
+            android_match = re.search(r"\bandroid\s*\{", source)
+            if not android_match:
+                raise RuntimeError("Could not find the Android DSL block to enable AIDL generation.")
+            insertion = android_match.end()
+            source = source[:insertion] + "\n    buildFeatures {\n        aidl = true\n    }\n" + source[insertion:]
+
     source = re.sub(r"compileSdkVersion\s+\d+", "compileSdkVersion 36", source, count=1)
     source = re.sub(
         r"buildToolsVersion\s+['\"][^'\"]+['\"]",
