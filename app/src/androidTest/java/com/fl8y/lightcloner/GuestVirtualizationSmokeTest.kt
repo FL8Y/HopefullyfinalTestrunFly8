@@ -28,9 +28,10 @@ class GuestVirtualizationSmokeTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val fixtureApk = File(context.cacheDir, "fly8-guest-fixture.apk")
-        context.assets.open("guest-fixture.apk").use { input ->
-            fixtureApk.outputStream().use { output -> input.copyTo(output) }
-        }
+        assertTrue(
+            "The CI guest APK was not staged into FLY8's private cache.",
+            fixtureApk.isFile && fixtureApk.length() > 0L,
+        )
         val engine = VirtualAppEngine(context)
         var instanceId: String? = null
         try {

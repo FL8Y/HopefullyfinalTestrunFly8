@@ -240,6 +240,10 @@ def main() -> int:
             "App does not configure the UIAutomator instrumentation runner.")
     require("FLY8 GUEST RENDERED" in fixture_activity_source and "GUEST INPUT RECEIVED" in fixture_activity_source,
             "Benign guest fixture lacks visible render/input evidence.")
+    require('assets.open("guest-fixture.apk")' not in guest_smoke_test_source,
+            "Guest smoke test must not read the fixture from assets after CI stages it in app-private cache.")
+    require("fixtureApk.isFile" in guest_smoke_test_source and "fly8-guest-fixture.apk" in smoke_source,
+            "Guest APK staging and instrumentation cache path do not agree.")
     require("engine.install(" in guest_smoke_test_source and "engine.launch(" in guest_smoke_test_source,
             "Guest instrumentation test does not use the real VirtualApp install and launch paths.")
     require("Until.findObject(By.text(TEXT_RENDERED))" in guest_smoke_test_source and
