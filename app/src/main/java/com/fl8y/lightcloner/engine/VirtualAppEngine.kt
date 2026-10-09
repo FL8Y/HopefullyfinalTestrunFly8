@@ -31,6 +31,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
         Fly8VirtualRuntime.startEngineServices().getOrThrow()
         servicesReady = true
         Log.i(TAG, "Virtual package/activity services are responsive.")
+        Unit
     }.onFailure {
         servicesReady = false
         Log.e(TAG, "Virtual engine initialization failed.", it)
@@ -110,9 +111,8 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
             ?: error("Package is not installed in the virtual package manager.")
 
         val userManager = VUserManager.get()
-        val managedProfiles = info.installedUsers
-            .orEmpty()
-            .filter { userId ->
+        val installedUsers = info.getInstalledUsers() ?: intArrayOf()
+        val managedProfiles = installedUsers.filter { userId ->
                 userId != DEFAULT_USER &&
                     userManager.getUserInfo(userId)?.name?.startsWith(profilePrefix(packageName)) == true
             }
@@ -129,6 +129,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
             }
         }
         Log.i(TAG, "Virtual package uninstalled: $packageName")
+        Unit
     }.onFailure {
         Log.e(TAG, "Virtual package removal failed for $packageName.", it)
     }
@@ -188,6 +189,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
             "Virtual ActivityManager rejected the launch (result=$result, package=$packageName, virtualUser=$virtualUserId)."
         }
         Log.i(TAG, "Virtual ActivityManager accepted launch request: package=$packageName user=$virtualUserId result=$result")
+        Unit
     }.onFailure {
         Log.e(TAG, "Virtual app launch failed for instance=$instanceId.", it)
     }
@@ -217,6 +219,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
             "The runtime still reports the guest process as running after the stop request."
         }
         Log.i(TAG, "Virtual process stop confirmed: package=$packageName user=$virtualUserId")
+        Unit
     }.onFailure {
         Log.e(TAG, "Could not stop virtual instance=$instanceId.", it)
     }
@@ -229,7 +232,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
         return core.getInstalledApps(0)
             .orEmpty()
             .flatMap { info ->
-                val users = info.installedUsers.orEmpty()
+                val users = info.getInstalledUsers() ?: intArrayOf()
                 users.mapNotNull { userId ->
                     if (!core.isAppInstalledAsUser(userId, info.packageName)) {
                         return@mapNotNull null
