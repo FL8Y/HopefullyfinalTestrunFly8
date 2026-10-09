@@ -149,7 +149,7 @@ class WirelessPairingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag(),
         )
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification_fly8)
             .setContentTitle("FLY8 · Wireless Debugging")
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))

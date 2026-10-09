@@ -39,9 +39,9 @@ No physical Android device is attached to this workspace. GitHub run 37937166208
 
 ## Latest emulator finding (run 37937166208)
 
-- API 31 smoke job completed successfully.
-- API 36 guest fixture failed during a real virtual launch at `com.lody.virtual.client.VClientImpl.bindApplicationNoCheck` line 389. The pinned source calls `LoadedApk.getClassLoader.call(data.info)` and the next line dereferences a null class loader.
-- A reproducible compatibility patch is being added to `scripts/prepare_virtual_engine.py`; the acceptance bar remains successful visible guest rendering and input, not merely avoiding an NPE.
+- In run `37955141226`, API 31 reached `PAIRING_NOTIFICATION_PASS` but later crashed on a status update with `RemoteServiceException: Bad notification` because the launcher foreground image is invalid for a small status icon.
+- API 36 reached the real guest launch but could not resolve the guest class loader, now failing explicitly in `VClientImpl.bindApplicationNoCheck` rather than with an NPE.
+- The hardening branch adds a monochrome notification vector, exact no-argument mirror binding and `VClientImpl` verbose log capture. The acceptance bar remains successful visible guest rendering and input, not merely avoiding an exception.
 
 ## Clone install and runtime
 

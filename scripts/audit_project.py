@@ -12,6 +12,7 @@ COLORS = ROOT / "app/src/main/res/values/colors.xml"
 ICON_ADAPTIVE = ROOT / "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
 ICON_ADAPTIVE_ROUND = ROOT / "app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml"
 ICON_FOREGROUND = ROOT / "app/src/main/res/mipmap-nodpi/ic_launcher_foreground.png"
+NOTIFICATION_ICON = ROOT / "app/src/main/res/drawable/ic_notification_fly8.xml"
 APP_GRADLE = ROOT / "app/build.gradle.kts"
 SETTINGS = ROOT / "settings.gradle.kts"
 ENGINE_GRADLE = ROOT / "vendor/virtualapp16/lib/build.gradle"
@@ -150,6 +151,17 @@ def main() -> int:
     require(ICON_ADAPTIVE_ROUND.is_file(), "Adaptive round launcher icon XML is missing.")
     require(ICON_FOREGROUND.is_file() and ICON_FOREGROUND.stat().st_size > 1000,
             "Cyber-eye transparent launcher foreground is missing or unexpectedly small.")
+    require(NOTIFICATION_ICON.is_file(), "Monochrome FLY8 status-bar notification icon is missing.")
+    if NOTIFICATION_ICON.is_file():
+        try:
+            notification_icon_root = ET.parse(NOTIFICATION_ICON).getroot()
+            require(notification_icon_root.tag == "vector", "Pairing notification icon must be a vector drawable.")
+            notification_paths = notification_icon_root.findall("path")
+            require(bool(notification_paths), "Pairing notification vector has no paths.")
+            require(any(node.attrib.get(ANDROID_NS + "fillColor") == "#FFFFFFFF" for node in notification_paths),
+                    "Pairing notification vector must be a white monochrome status icon.")
+        except ET.ParseError as exc:
+            errors.append(f"Pairing notification vector XML is invalid: {exc}")
     for icon_xml in (ICON_ADAPTIVE, ICON_ADAPTIVE_ROUND):
         if icon_xml.is_file():
             try:
@@ -207,6 +219,9 @@ def main() -> int:
             "Notification code submission must call real LibADB pairing.")
     require("adb.isConnected" in pairing_service_source,
             "Connected status must be based on the ADB manager's actual connection state.")
+    require("setSmallIcon(R.drawable.ic_notification_fly8)" in pairing_service_source and
+            "R.mipmap.ic_launcher_foreground" not in pairing_service_source,
+            "Pairing notifications must use the dedicated monochrome vector, not launcher foreground artwork.")
     require("android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" in declared_permissions,
             "Notification-led pairing service requires connectedDevice foreground-service permission.")
     services = manifest.findall("./application/service")
@@ -244,6 +259,8 @@ def main() -> int:
     require(smoke_source.startswith("#!/bin/sh"), "Emulator smoke test must be a standalone POSIX shell script.")
     require("Virtual service answered; virtual-user count=" in smoke_source,
             "Emulator smoke test must require real VirtualCore Binder/user-service readiness.")
+    require("VClientImpl:V" in smoke_source,
+            "Smoke logs must include VirtualApp guest class-loader diagnostics.")
     require("mResumedActivity" in smoke_source and "com.fl8y.lightcloner" in smoke_source,
             "Emulator smoke test must verify the actual FLY8 host Activity is resumed.")
     require('include(":guest-fixture")' in settings_source,

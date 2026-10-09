@@ -89,7 +89,7 @@ adb shell am instrument -w -r \
     com.fl8y.lightcloner.test/androidx.test.runner.AndroidJUnitRunner \
     > "$guest_test_log" 2>&1
 guest_test_result=$?
-adb logcat -d -s AndroidRuntime:E FLY8.VirtualRuntime:I FLY8.VirtualAppEngine:V FLY8.Diagnostics:V FLY8.GuestSmoke:I WirelessPairingService:V > "$runtime_log" 2>&1 || adb logcat -d > "$runtime_log" 2>&1 || true
+adb logcat -d -s AndroidRuntime:E FLY8.VirtualRuntime:I FLY8.VirtualAppEngine:V FLY8.Diagnostics:V FLY8.GuestSmoke:I WirelessPairingService:V VClientImpl:V > "$runtime_log" 2>&1 || adb logcat -d > "$runtime_log" 2>&1 || true
 if [ "$guest_test_result" -ne 0 ] || ! grep -q 'OK (2 tests)' "$guest_test_log"; then
     echo "API ${api_level}: guest render/input or private pairing notification instrumentation failed." >> "$GITHUB_STEP_SUMMARY"
     cat "$guest_test_log" "$runtime_log"
