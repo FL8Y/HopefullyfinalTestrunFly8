@@ -136,3 +136,61 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
+
+  emulator-smoke:
+    name: Android runtime smoke test (API ${{ matrix.api-level }})
+    needs: build-and-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [31, 36]
+    steps:
+      - name: Download debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: fly8-debug-apk
+          path: build/apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install and launch FLY8 on Android API ${{ matrix.api-level }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          emulator-boot-timeout: 600
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            mkdir -p build/emulator-smoke
+            adb install -r build/apk/app-debug.apk
+            adb logcat -c
+            adb shell am start -W -n com.fl8y.lightcloner/.MainActivity
+            sleep 15
+            adb shell pidof com.fl8y.lightcloner
+            adb shell dumpsys activity activities > build/emulator-smoke/activities-api-${{ matrix.api-level }}.txt
+            grep -E 'mResumedActivity|topResumedActivity' build/emulator-smoke/activities-api-${{ matrix.api-level }}.txt | grep -q 'com.fl8y.lightcloner'
+            adb logcat -d -s AndroidRuntime:E FLY8.VirtualRuntime:I FLY8.VirtualAppEngine:V FLY8.Diagnostics:V > build/emulator-smoke/runtime-api-${{ matrix.api-level }}.log
+            if grep -q 'FATAL EXCEPTION' build/emulator-smoke/runtime-api-${{ matrix.api-level }}.log; then
+              cat build/emulator-smoke/runtime-api-${{ matrix.api-level }}.log
+              exit 1
+            fi
+            echo "API ${{ matrix.api-level }}: FLY8 host Activity/process launch passed. Virtual engine logs are captured separately; this smoke test does not claim guest UI/render/task parity." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload emulator smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly8-emulator-smoke-api-${{ matrix.api-level }}
+          path: build/emulator-smoke/
+          if-no-files-found: warn
+          retention-days: 14
