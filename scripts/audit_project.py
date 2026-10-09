@@ -18,6 +18,10 @@ ENGINE_GRADLE = ROOT / "vendor/virtualapp16/lib/build.gradle"
 MODULES = ROOT / ".gitmodules"
 MAIN = ROOT / "app/src/main/java/com/fl8y/lightcloner/MainActivity.kt"
 SMOKE_TEST = ROOT / ".github/scripts/emulator-smoke.sh"
+WORKFLOW = ROOT / ".github/workflows/android-ci.yml"
+GUEST_FIXTURE_GRADLE = ROOT / "guest-fixture/build.gradle.kts"
+GUEST_FIXTURE_ACTIVITY = ROOT / "guest-fixture/src/main/java/com/fl8y/guestfixture/GuestActivity.kt"
+GUEST_SMOKE_TEST = ROOT / "app/src/androidTest/java/com/fl8y/lightcloner/GuestVirtualizationSmokeTest.kt"
 DIAGNOSTICS = ROOT / "app/src/main/java/com/fl8y/lightcloner/Fly8Diagnostics.kt"
 APP_CLASS = ROOT / "app/src/main/java/com/fl8y/lightcloner/Fly8Application.kt"
 ADB = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/WirelessAdbController.kt"
@@ -70,6 +74,10 @@ def main() -> int:
     modules_source = read_text(MODULES)
     main_source = read_text(MAIN)
     smoke_source = read_text(SMOKE_TEST)
+    workflow_source = read_text(WORKFLOW)
+    fixture_gradle_source = read_text(GUEST_FIXTURE_GRADLE)
+    fixture_activity_source = read_text(GUEST_FIXTURE_ACTIVITY)
+    guest_smoke_test_source = read_text(GUEST_SMOKE_TEST)
     diagnostics_source = read_text(DIAGNOSTICS)
     app_class_source = read_text(APP_CLASS)
     adb_source = read_text(ADB)
@@ -224,8 +232,23 @@ def main() -> int:
             "Emulator smoke test must require real VirtualCore Binder/user-service readiness.")
     require("mResumedActivity" in smoke_source and "com.fl8y.lightcloner" in smoke_source,
             "Emulator smoke test must verify the actual FLY8 host Activity is resumed.")
-    require("WirelessPairingService" in smoke_source and "dumpsys notification" in smoke_source,
-            "Emulator smoke test must verify notification-led pairing service startup and notification visibility.")
+    require('include(":guest-fixture")' in settings_source,
+            "The benign virtualization guest fixture module is not included.")
+    require("stageGuestFixtureApk" in app_gradle and "guest-fixture.apk" in app_gradle,
+            "The guest APK must be bundled as a debug-only test asset.")
+    require("testInstrumentationRunner" in app_gradle and "androidx.test.uiautomator:uiautomator" in app_gradle,
+            "App does not configure the UIAutomator instrumentation runner.")
+    require("FLY8 GUEST RENDERED" in fixture_activity_source and "GUEST INPUT RECEIVED" in fixture_activity_source,
+            "Benign guest fixture lacks visible render/input evidence.")
+    require("engine.install(" in guest_smoke_test_source and "engine.launch(" in guest_smoke_test_source,
+            "Guest instrumentation test does not use the real VirtualApp install and launch paths.")
+    require("Until.findObject(By.text(TEXT_RENDERED))" in guest_smoke_test_source and
+            "Until.hasObject(By.text(TEXT_INPUT_RECEIVED))" in guest_smoke_test_source,
+            "Guest instrumentation must assert visible UI and actual input response.")
+    require("WirelessPairingService" in guest_smoke_test_source and "NotificationManager" in guest_smoke_test_source,
+            "Instrumentation must start the private pairing service inside FLY8's UID and inspect its notification.")
+    require(":app:assembleDebugAndroidTest" in workflow_source and "app-debug-androidTest.apk" in smoke_source,
+            "CI must build and execute the instrumentation test APK.")
     require("interface VirtualizationEngine" in engine_contract, "VirtualizationEngine contract missing.")
     warnings.append("Source checks are not Android build or device runtime proof; guest rendering/task/background parity remains unverified.")
 

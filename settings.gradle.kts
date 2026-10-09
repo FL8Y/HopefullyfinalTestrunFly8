@@ -23,5 +23,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "FLY8"
 include(":app")
+include(":guest-fixture")
 include(":virtual-engine")
 project(":virtual-engine").projectDir = file("vendor/virtualapp16/lib")

@@ -13,6 +13,7 @@ android {
         targetSdk = 36
         versionCode = 2
         versionName = "0.2.0-dev"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -33,7 +34,20 @@ android {
     buildFeatures {
         buildConfig = true
     }
+
+    sourceSets.getByName("debug").assets.srcDir(
+        layout.buildDirectory.dir("generated/guest-fixture-assets/debug")
+    )
 }
+
+val stageGuestFixtureApk by tasks.registering(Copy::class) {
+    dependsOn(":guest-fixture:assembleDebug")
+    from(project(":guest-fixture").layout.buildDirectory.file("outputs/apk/debug/guest-fixture-debug.apk"))
+    into(layout.buildDirectory.dir("generated/guest-fixture-assets/debug"))
+    rename { "guest-fixture.apk" }
+}
+
+tasks.named("preDebugBuild").configure { dependsOn(stageGuestFixtureApk) }
 
 kotlin {
     jvmToolchain(17)
@@ -50,4 +64,7 @@ dependencies {
     // Optional elevated-operation path. Wireless debugging remains independent.
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }

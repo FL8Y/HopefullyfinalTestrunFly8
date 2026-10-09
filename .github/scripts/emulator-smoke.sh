@@ -8,8 +8,7 @@ mkdir -p build/emulator-smoke
 activity_log="build/emulator-smoke/activities-api-${api_level}.txt"
 runtime_log="build/emulator-smoke/runtime-api-${api_level}.log"
 start_log="build/emulator-smoke/start-api-${api_level}.txt"
-notification_log="build/emulator-smoke/notifications-api-${api_level}.txt"
-pairing_start_log="build/emulator-smoke/pairing-service-api-${api_level}.txt"
+guest_test_log="build/emulator-smoke/guest-virtualization-api-${api_level}.txt"
 device_state=""
 
 # Wait for the ADB transport to become online after the emulator's cold boot.
@@ -68,18 +67,30 @@ if ! grep -q 'Virtual service answered; virtual-user count=' "$runtime_log"; the
     exit 1
 fi
 
-# Verify that the notification-led wireless pairing foreground service can start.
-# No pairing endpoint is expected inside CI; this tests notification/service startup only.
+# Start the private pairing service and verify a real notification inside the app UID.
+# Instrumentation also checks install -> virtual Activity launch -> visible UI -> user input.
 adb shell pm grant com.fl8y.lightcloner android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
-adb shell am start-foreground-service -n com.fl8y.lightcloner/.connection.WirelessPairingService -a com.fl8y.lightcloner.adb.START_PAIRING > "$pairing_start_log" 2>&1
-pairing_start_result=$?
-sleep 3
-adb shell dumpsys notification --noredact > "$notification_log" 2>&1 || true
-adb logcat -d -s AndroidRuntime:E FLY8.VirtualRuntime:I FLY8.VirtualAppEngine:V FLY8.Diagnostics:V WirelessPairingService:V > "$runtime_log" 2>&1 || adb logcat -d > "$runtime_log" 2>&1 || true
-if [ "$pairing_start_result" -ne 0 ] || ! grep -E 'Wireless Debugging|FLY8' "$notification_log" | grep -q 'Wireless Debugging'; then
-    echo "API ${api_level}: notification-led pairing service did not publish an observable Wireless Debugging notification." >> "$GITHUB_STEP_SUMMARY"
-    cat "$pairing_start_log" "$notification_log" "$runtime_log"
+if ! adb install -r build/apk/app-debug-androidTest.apk; then
+    adb logcat -d > "$runtime_log" 2>&1 || true
+    echo "API ${api_level}: instrumentation APK installation failed." >> "$GITHUB_STEP_SUMMARY"
+    cat "$runtime_log"
     exit 1
 fi
-
-echo "API ${api_level}: FLY8 host Activity/process, VirtualCore Binder/user-service readiness, and pairing foreground-notification startup passed. No actual pairing endpoint exists in CI; guest UI/render/task/AFK parity remains unverified." >> "$GITHUB_STEP_SUMMARY"
+adb shell am instrument -w -r \
+    -e class com.fl8y.lightcloner.GuestVirtualizationSmokeTest \
+    com.fl8y.lightcloner.test/androidx.test.runner.AndroidJUnitRunner \
+    > "$guest_test_log" 2>&1
+guest_test_result=$?
+adb logcat -d -s AndroidRuntime:E FLY8.VirtualRuntime:I FLY8.VirtualAppEngine:V FLY8.Diagnostics:V FLY8.GuestSmoke:I WirelessPairingService:V > "$runtime_log" 2>&1 || adb logcat -d > "$runtime_log" 2>&1 || true
+if [ "$guest_test_result" -ne 0 ] || ! grep -q 'OK (2 tests)' "$guest_test_log"; then
+    echo "API ${api_level}: guest render/input or private pairing notification instrumentation failed." >> "$GITHUB_STEP_SUMMARY"
+    cat "$guest_test_log" "$runtime_log"
+    exit 1
+fi
+if ! grep -q 'GUEST_SMOKE_PASS rendered=true input=true' "$runtime_log" ||
+   ! grep -q 'PAIRING_NOTIFICATION_PASS foreground=true title=true discoveryState=true' "$runtime_log"; then
+    echo "API ${api_level}: instrumentation lacks explicit guest UI/input or notification evidence." >> "$GITHUB_STEP_SUMMARY"
+    cat "$guest_test_log" "$runtime_log"
+    exit 1
+fi
+echo "API ${api_level}: host Activity/process, VirtualCore services, real guest install/launch/render/input, and pairing notification startup passed. Physical pairing, Recent Apps/task restoration, multi-instance isolation and screen-off/AFK remain unverified." >> "$GITHUB_STEP_SUMMARY"
