@@ -35,19 +35,7 @@ android {
         buildConfig = true
     }
 
-    sourceSets.getByName("debug").assets.srcDir(
-        layout.buildDirectory.dir("generated/guest-fixture-assets/debug")
-    )
 }
-
-val stageGuestFixtureApk by tasks.registering(Copy::class) {
-    dependsOn(":guest-fixture:assembleDebug")
-    from(project(":guest-fixture").layout.buildDirectory.file("outputs/apk/debug/guest-fixture-debug.apk"))
-    into(layout.buildDirectory.dir("generated/guest-fixture-assets/debug"))
-    rename { "guest-fixture.apk" }
-}
-
-tasks.named("preDebugBuild").configure { dependsOn(stageGuestFixtureApk) }
 
 kotlin {
     jvmToolchain(17)

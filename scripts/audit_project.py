@@ -234,8 +234,8 @@ def main() -> int:
             "Emulator smoke test must verify the actual FLY8 host Activity is resumed.")
     require('include(":guest-fixture")' in settings_source,
             "The benign virtualization guest fixture module is not included.")
-    require("stageGuestFixtureApk" in app_gradle and "guest-fixture.apk" in app_gradle,
-            "The guest APK must be bundled as a debug-only test asset.")
+    require(":guest-fixture:assembleDebug" in workflow_source and "guest-fixture-debug.apk" in smoke_source,
+            "CI must build and stage the benign guest APK separately from the FLY8 host.")
     require("testInstrumentationRunner" in app_gradle and "androidx.test.uiautomator:uiautomator" in app_gradle,
             "App does not configure the UIAutomator instrumentation runner.")
     require("FLY8 GUEST RENDERED" in fixture_activity_source and "GUEST INPUT RECEIVED" in fixture_activity_source,

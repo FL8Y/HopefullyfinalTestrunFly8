@@ -76,6 +76,14 @@ if ! adb install -r build/apk/app-debug-androidTest.apk; then
     cat "$runtime_log"
     exit 1
 fi
+if ! adb push build/apk/guest-fixture-debug.apk /data/local/tmp/fly8-guest-fixture.apk; then
+    echo "API ${api_level}: could not stage the benign guest APK on the emulator." >> "$GITHUB_STEP_SUMMARY"
+    exit 1
+fi
+if ! adb shell run-as com.fl8y.lightcloner cp /data/local/tmp/fly8-guest-fixture.apk cache/fly8-guest-fixture.apk; then
+    echo "API ${api_level}: could not copy the guest APK to FLY8's private cache." >> "$GITHUB_STEP_SUMMARY"
+    exit 1
+fi
 adb shell am instrument -w -r \
     -e class com.fl8y.lightcloner.GuestVirtualizationSmokeTest \
     com.fl8y.lightcloner.test/androidx.test.runner.AndroidJUnitRunner \

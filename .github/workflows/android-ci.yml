@@ -127,7 +127,7 @@ jobs:
           retention-days: 30
 
       - name: Build debug APK and guest instrumentation test
-        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+        run: gradle :guest-fixture:assembleDebug :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
 
       - name: Stage host and instrumentation APKs
         if: success()
@@ -136,6 +136,7 @@ jobs:
           mkdir -p build/apk
           cp app/build/outputs/apk/debug/app-debug.apk build/apk/app-debug.apk
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk build/apk/app-debug-androidTest.apk
+          cp guest-fixture/build/outputs/apk/debug/guest-fixture-debug.apk build/apk/guest-fixture-debug.apk
 
       - name: Upload host and guest-test APKs
         if: success()
