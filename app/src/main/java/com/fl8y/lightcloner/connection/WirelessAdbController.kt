@@ -3,6 +3,7 @@ package com.fl8y.lightcloner.connection
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import com.fl8y.lightcloner.Fly8Diagnostics
 import io.github.muntashirakon.adb.AdbAuthenticationFailedException
 import io.github.muntashirakon.adb.AdbPairingRequiredException
 import java.io.IOException
@@ -44,12 +45,15 @@ class WirelessAdbController(
             return
         }
 
+        Fly8Diagnostics.record("ADB", "Pairing started on port $pairingPort; pairing code omitted.")
         Thread {
             try {
                 postStatus("Pairing with $safeHost:$pairingPort…")
                 manager.pair(safeHost, pairingPort, safeCode)
+                Fly8Diagnostics.record("ADB", "Pairing protocol completed on port $pairingPort.")
                 post { callback.onPairingSucceeded(safeHost, pairingPort) }
             } catch (t: Throwable) {
+                Fly8Diagnostics.record("ADB", "Pairing failed.", t)
                 post { callback.onFailure(connectionMessage(t), t) }
             }
         }.start()
@@ -67,6 +71,7 @@ class WirelessAdbController(
             return
         }
 
+        Fly8Diagnostics.record("ADB", "Connection attempt started on port $connectPort.")
         Thread {
             try {
                 postStatus("Connecting to $safeHost:$connectPort…")
@@ -74,14 +79,17 @@ class WirelessAdbController(
                 if (!connected) {
                     throw IOException("ADB connection was not established.")
                 }
+                Fly8Diagnostics.record("ADB", "Authenticated connection established on port $connectPort.")
                 post { callback.onConnected(safeHost, connectPort) }
             } catch (t: Throwable) {
+                Fly8Diagnostics.record("ADB", "Connection failed.", t)
                 post { callback.onFailure(connectionMessage(t), t) }
             }
         }.start()
     }
 
     fun autoConnect(timeoutMs: Long = 8_000L) {
+        Fly8Diagnostics.record("ADB", "mDNS/paired endpoint discovery started; timeoutMs=$timeoutMs.")
         Thread {
             try {
                 postStatus("Discovering paired ADB endpoint…")
@@ -89,8 +97,10 @@ class WirelessAdbController(
                 if (!connected) {
                     throw IOException("ADB connection was not established.")
                 }
+                Fly8Diagnostics.record("ADB", "Authenticated connection established through discovery.")
                 post { callback.onConnected(manager.hostAddress, -1) }
             } catch (t: Throwable) {
+                Fly8Diagnostics.record("ADB", "Automatic discovery/connect failed.", t)
                 post { callback.onFailure(connectionMessage(t), t) }
             }
         }.start()
@@ -99,6 +109,7 @@ class WirelessAdbController(
     fun close() {
         // Close the transport but keep the Android Keystore identity for the next connection.
         runCatching { manager.disconnect() }
+        Fly8Diagnostics.record("ADB", "Transport disconnect requested; saved key identity retained.")
     }
 
     private fun connectionMessage(error: Throwable): String {

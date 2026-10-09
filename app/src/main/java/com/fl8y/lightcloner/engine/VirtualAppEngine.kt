@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.res.Resources
 import android.util.Log
+import com.fl8y.lightcloner.Fly8Diagnostics
 import com.lody.virtual.client.core.InstallStrategy
 import com.lody.virtual.client.core.VirtualCore
 import com.lody.virtual.client.ipc.VActivityManager
@@ -30,10 +31,12 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
     override fun initialize(): Result<Unit> = runCatching {
         Fly8VirtualRuntime.startEngineServices().getOrThrow()
         servicesReady = true
+        Fly8Diagnostics.record("Engine", "Virtual package/activity services are responsive.")
         Log.i(TAG, "Virtual package/activity services are responsive.")
         Unit
     }.onFailure {
         servicesReady = false
+        Fly8Diagnostics.record("Engine", "Virtual engine initialization failed.", it)
         Log.e(TAG, "Virtual engine initialization failed.", it)
     }
 
@@ -64,6 +67,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
             "The selected APK cannot be read."
         }
 
+        Fly8Diagnostics.record("Package", "Installing selected APK into the virtual package manager.")
         val core = VirtualCore.get()
         val installResult = core.installPackage(
             apk.absolutePath,
@@ -92,6 +96,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
         val refreshed = core.getInstalledAppInfo(packageName, 0)
             ?: error("The installed package disappeared from the virtual package manager.")
 
+        Fly8Diagnostics.record("Package", "Virtual package installed: $packageName")
         Log.i(TAG, "Virtual package installed: $packageName")
         ClonePackage(
             packageName = packageName,
@@ -99,6 +104,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
             installedInstanceCount = refreshed.installedUsers?.size ?: 0,
         )
     }.onFailure {
+        Fly8Diagnostics.record("Package", "Virtual package installation failed.", it)
         Log.e(TAG, "Virtual package installation failed.", it)
     }
 
@@ -162,9 +168,11 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
         }
 
         val session = sessionFor(refreshed, virtualUser.id)
+        Fly8Diagnostics.record("Clone", "Created virtual instance: package=$packageName user=${virtualUser.id}.")
         Log.i(TAG, "Created virtual instance: package=$packageName user=${virtualUser.id}")
         session
     }.onFailure {
+        Fly8Diagnostics.record("Clone", "Could not create virtual instance for $packageName.", it)
         Log.e(TAG, "Could not create virtual instance for $packageName.", it)
     }
 
@@ -188,9 +196,11 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
         check(result >= 0) {
             "Virtual ActivityManager rejected the launch (result=$result, package=$packageName, virtualUser=$virtualUserId)."
         }
+        Fly8Diagnostics.record("Activity", "Virtual ActivityManager accepted launch request: package=$packageName user=$virtualUserId result=$result; visual rendering is not confirmed.")
         Log.i(TAG, "Virtual ActivityManager accepted launch request: package=$packageName user=$virtualUserId result=$result")
         Unit
     }.onFailure {
+        Fly8Diagnostics.record("Activity", "Virtual app launch failed for instance=$instanceId.", it)
         Log.e(TAG, "Virtual app launch failed for instance=$instanceId.", it)
     }
 
@@ -218,9 +228,11 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
         check(stopped || !core.isAppRunning(packageName, virtualUserId)) {
             "The runtime still reports the guest process as running after the stop request."
         }
+        Fly8Diagnostics.record("Process", "Virtual process stop confirmed: package=$packageName user=$virtualUserId")
         Log.i(TAG, "Virtual process stop confirmed: package=$packageName user=$virtualUserId")
         Unit
     }.onFailure {
+        Fly8Diagnostics.record("Process", "Could not stop virtual instance=$instanceId.", it)
         Log.e(TAG, "Could not stop virtual instance=$instanceId.", it)
     }
 
@@ -258,6 +270,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
                 CloneSession.State.INSTALLED
             }
         }.getOrElse {
+            Fly8Diagnostics.record("Process", "Unable to query liveness for ${info.packageName} / $userId; state remains UNKNOWN.", it)
             Log.w(TAG, "Unable to query process state for ${info.packageName} / $userId.", it)
             CloneSession.State.UNKNOWN
         }

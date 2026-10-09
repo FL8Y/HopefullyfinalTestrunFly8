@@ -3,6 +3,8 @@ package com.fl8y.lightcloner
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -194,6 +196,36 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
         addCardTitle(notices, "Open-source components")
         addCardText(notices, "License notices are maintained in the source repository for third-party components actually integrated into this build.")
         content.addView(notices)
+
+        content.addView(space(12))
+        val diagnostics = card()
+        addCardTitle(diagnostics, "Diagnostics")
+        addCardText(
+            diagnostics,
+            "Recent connection, engine, package, process and launch events are kept in a bounded in-memory log. Pairing codes and private keys are not recorded."
+        )
+        diagnostics.addView(actionButton("View diagnostic log") { showDiagnosticLog() })
+        diagnostics.addView(actionButton("Copy diagnostic log") { copyDiagnosticLog() })
+        diagnostics.addView(actionButton("Clear diagnostic log") {
+            Fly8Diagnostics.clear()
+            setStatus("Diagnostic log cleared.")
+        })
+        content.addView(diagnostics)
+    }
+
+    private fun showDiagnosticLog() {
+        AlertDialog.Builder(this)
+            .setTitle("FLY8 diagnostic log")
+            .setMessage(Fly8Diagnostics.snapshot())
+            .setPositiveButton("Copy") { _, _ -> copyDiagnosticLog() }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun copyDiagnosticLog() {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("FLY8 diagnostic log", Fly8Diagnostics.snapshot()))
+        setStatus("Diagnostic log copied to clipboard.")
     }
 
     private fun renderPackages(parent: LinearLayout) {
@@ -298,6 +330,7 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
     }
 
     private fun refreshEngineData() {
+        Fly8Diagnostics.record("Engine", "Refreshing virtual packages and process states.")
         setStatus("Checking the real virtual runtime…")
         io.execute {
             val result = runCatching {
@@ -313,6 +346,7 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
                     onSuccess = { (newPackages, newSessions) ->
                         packages = newPackages
                         sessions = newSessions
+                        Fly8Diagnostics.record("Engine", "Virtual runtime query completed: ${packages.size} package(s), ${sessions.size} virtual instance(s).")
                         setStatus("Virtual runtime ready · ${packages.size} package(s) · ${sessions.size} instance(s).")
                         when (currentScreen) {
                             Screen.DASHBOARD -> showDashboard()
@@ -322,6 +356,7 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
                     },
                     onFailure = { failure ->
                         setStatus("Virtual runtime unavailable: ${failure.message ?: failure.javaClass.simpleName}")
+                        Fly8Diagnostics.record("Engine", "Virtual runtime refresh failed.", failure)
                         Log.e(TAG, "Virtual runtime refresh failed.", failure)
                     }
                 )
@@ -334,17 +369,20 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
         action: () -> Result<*>,
         onSuccess: () -> Unit = {},
     ) {
+        Fly8Diagnostics.record("Operation", progressMessage)
         setStatus(progressMessage)
         io.execute {
             val result = runCatching { action().getOrThrow() }
             mainHandler.post {
                 result.fold(
                     onSuccess = {
+                        Fly8Diagnostics.record("Operation", "Completed: $progressMessage")
                         setStatus("Operation completed.")
                         onSuccess()
                     },
                     onFailure = { failure ->
                         setStatus("Operation failed: ${failure.message ?: failure.javaClass.simpleName}")
+                        Fly8Diagnostics.record("Operation", "Failed: $progressMessage", failure)
                         Log.e(TAG, progressMessage, failure)
                     }
                 )
@@ -421,14 +459,17 @@ class MainActivity : Activity(), WirelessAdbController.Callback {
     override fun onStatus(message: String) = setStatus(message)
 
     override fun onConnected(host: String, port: Int) {
+        Fly8Diagnostics.record("ADB", if (port > 0) "Authenticated ADB connection established on port $port." else "Authenticated ADB connection established through discovery.")
         setStatus(if (port > 0) "ADB connected to $host:$port." else "ADB connection established through discovery.")
     }
 
     override fun onPairingSucceeded(host: String, port: Int) {
+        Fly8Diagnostics.record("ADB", "Pairing protocol completed on port $port; connection has not yet been established.")
         setStatus("ADB pairing protocol completed for $host:$port. Establish the ADB connection next.")
     }
 
     override fun onFailure(message: String, error: Throwable?) {
+        Fly8Diagnostics.record("ADB", message, error)
         setStatus(message)
         if (error != null) Log.e(TAG, "ADB operation failed.", error)
     }

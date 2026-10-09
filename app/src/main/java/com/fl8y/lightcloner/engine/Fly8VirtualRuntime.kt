@@ -2,6 +2,7 @@ package com.fl8y.lightcloner.engine
 
 import android.content.Context
 import android.util.Log
+import com.fl8y.lightcloner.Fly8Diagnostics
 import com.lody.virtual.client.core.VirtualCore
 import com.lody.virtual.client.stub.VASettings
 import com.lody.virtual.os.VUserManager
@@ -30,11 +31,14 @@ object Fly8VirtualRuntime {
         try {
             VASettings.ENABLE_IO_REDIRECT = true
             VASettings.ENABLE_INNER_SHORTCUT = false
+            Fly8Diagnostics.record("Runtime", "VirtualCore startup requested.")
             VirtualCore.get().startup(context)
             startupCompleted = true
+            Fly8Diagnostics.record("Runtime", "VirtualCore startup completed.")
             Log.i(TAG, "VirtualCore startup completed.")
         } catch (failure: Throwable) {
             initializationFailure = failure
+            Fly8Diagnostics.record("Runtime", "VirtualCore startup failed.", failure)
             Log.e(TAG, "VirtualCore startup failed.", failure)
         }
     }
@@ -47,9 +51,11 @@ object Fly8VirtualRuntime {
             // or inherit upstream app-specific delegates.
             VirtualCore.get().initialize(object : VirtualCore.VirtualInitializer() {})
             initializerDispatched = true
+            Fly8Diagnostics.record("Runtime", "VirtualCore process initialization callback completed.")
             Log.i(TAG, "VirtualCore process initialization callback completed.")
         } catch (failure: Throwable) {
             initializationFailure = failure
+            Fly8Diagnostics.record("Runtime", "VirtualCore process initialization callback failed.", failure)
             Log.e(TAG, "VirtualCore process initialization callback failed.", failure)
         }
     }
@@ -67,6 +73,7 @@ object Fly8VirtualRuntime {
     }
 
     fun startEngineServices(): Result<Unit> = runCatching {
+        Fly8Diagnostics.record("Service", "Checking virtual service startup.")
         requireStartup()
         VirtualCore.get().waitForEngine()
 
@@ -77,7 +84,10 @@ object Fly8VirtualRuntime {
             throw IllegalStateException("Virtual user service returned no users.")
         }
 
+        Fly8Diagnostics.record("Service", "Virtual service answered; virtual-user count=${virtualUsers.size}.")
         Log.i(TAG, "Virtual service answered; virtual-user count=${virtualUsers.size}.")
+    }.onFailure {
+        Fly8Diagnostics.record("Service", "Virtual service initialization failed.", it)
     }
 
     fun isBootstrapped(): Boolean =
