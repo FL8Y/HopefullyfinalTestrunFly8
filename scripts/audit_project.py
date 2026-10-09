@@ -74,6 +74,7 @@ def main() -> int:
     app_class_source = read_text(APP_CLASS)
     adb_source = read_text(ADB)
     adb_manager_source = read_text(ADB_MANAGER)
+    pairing_service_source = read_text(PAIRING_SERVICE)
     shizuku_source = read_text(SHIZUKU)
     engine_contract = read_text(ENGINE_CONTRACT)
     engine_runtime = read_text(ENGINE_RUNTIME)
@@ -184,12 +185,18 @@ def main() -> int:
             "Notification code submission must call real LibADB pairing.")
     require("adb.isConnected" in pairing_service_source,
             "Connected status must be based on the ADB manager's actual connection state.")
-    require("android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" in manifest_source,
+    require("android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" in declared_permissions,
             "Notification-led pairing service requires connectedDevice foreground-service permission.")
-    require('android:name=".connection.WirelessPairingService"' in manifest_source and
-            'android:foregroundServiceType="connectedDevice"' in manifest_source,
-            "Notification-led pairing service is not declared with its foreground service type.")
-    require("POST_NOTIFICATIONS" in manifest_source,
+    services = manifest.findall("./application/service")
+    require(
+        any(
+            node.attrib.get(ANDROID_NS + "name") == ".connection.WirelessPairingService"
+            and node.attrib.get(ANDROID_NS + "foregroundServiceType") == "connectedDevice"
+            for node in services
+        ),
+        "Notification-led pairing service is not declared with its foreground service type.",
+    )
+    require("android.permission.POST_NOTIFICATIONS" in declared_permissions,
             "Android 13+ notification permission must be declared.")
     require("beginWirelessPairing()" in main_source and "WirelessPairingService.ACTION_START" in main_source,
             "Dashboard does not offer the streamlined notification-led pairing flow.")

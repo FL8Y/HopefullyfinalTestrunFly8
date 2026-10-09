@@ -25,7 +25,7 @@ class WirelessAdbController(
         fun onFailure(message: String, error: Throwable? = null)
     }
 
-    private val manager = Fly8AdbManager(context)
+    private val manager = Fly8AdbManager.get(context)
     private val main = Handler(Looper.getMainLooper())
 
     fun pair(host: String, pairingPort: Int, pairingCode: String) {
