@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
@@ -44,6 +45,7 @@ class WirelessPairingService : Service() {
     private var phase = Phase.FINDING_PAIRING
     private var discoveryStartedAt = 0L
     private var resolveInFlight = false
+    private var multicastLock: WifiManager.MulticastLock? = null
     private var phaseTimeout: Runnable? = null
 
     private enum class Phase { FINDING_PAIRING, ENTER_CODE, PAIRING, FINDING_CONNECT, CONNECTING, CONNECTED, FAILED }
@@ -60,7 +62,7 @@ class WirelessPairingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_SUBMIT_CODE -> {
-                ensureForeground("Pairing code submitted securely.")
+                ensureForeground("Pairing code submitted securely.", notificationId = activeNotificationId)
                 val code = RemoteInput.getResultsFromIntent(intent)
                     ?.getCharSequence(KEY_PAIRING_CODE)?.toString()?.trim().orEmpty()
                 submitCode(code)
@@ -300,7 +302,12 @@ class WirelessPairingService : Service() {
             }
 
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                if (discovery !== listener) {
+                    Fly8Diagnostics.record("ADB pairing", "Ignored stale discovery-start failure for $serviceType.")
+                    return
+                }
                 discovery = null
+                releaseMulticastLock()
                 clearPhaseTimeout()
                 phase = Phase.FAILED
                 val message = "Could not start wireless debugging discovery (error $errorCode). Check Wi-Fi and try again."
@@ -315,9 +322,11 @@ class WirelessPairingService : Service() {
         }
         discovery = listener
         try {
+            acquireMulticastLock()
             manager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
         } catch (error: Exception) {
-            discovery = null
+            if (discovery === listener) discovery = null
+            releaseMulticastLock()
             clearPhaseTimeout()
             phase = Phase.FAILED
             val message = "Wireless debugging discovery failed: ${error.message ?: error.javaClass.simpleName}"
@@ -345,11 +354,35 @@ class WirelessPairingService : Service() {
         phaseTimeout = null
     }
 
+    private fun acquireMulticastLock() {
+        if (multicastLock?.isHeld == true) return
+        val wifi = getSystemService(Context.WIFI_SERVICE) as WifiManager
+        multicastLock = wifi.createMulticastLock("FLY8-wireless-adb-mdns").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+        Fly8Diagnostics.record("ADB pairing", "Wi-Fi multicast lock acquired for active mDNS discovery.")
+    }
+
+    private fun releaseMulticastLock() {
+        val lock = multicastLock ?: return
+        multicastLock = null
+        runCatching {
+            if (lock.isHeld) lock.release()
+        }.onFailure { error ->
+            Fly8Diagnostics.record("ADB pairing", "Could not release Wi-Fi multicast lock.", error)
+        }
+    }
+
     private fun stopDiscovery() {
-        val listener = discovery ?: return
+        val listener = discovery
         discovery = null
         resolveInFlight = false
-        runCatching { nsd.stopServiceDiscovery(listener) }
+        if (listener != null) {
+            runCatching { nsd.stopServiceDiscovery(listener) }
+        }
+        // This lock is scoped to discovery only; it is not held while pairing or connected.
+        releaseMulticastLock()
     }
 
     private fun submitCode(code: String) {
@@ -481,6 +514,7 @@ class WirelessPairingService : Service() {
     override fun onDestroy() {
         clearPhaseTimeout()
         stopDiscovery()
+        releaseMulticastLock()
         worker.shutdownNow()
         if (phase != Phase.CONNECTED) runCatching { adb.disconnect() }
         super.onDestroy()

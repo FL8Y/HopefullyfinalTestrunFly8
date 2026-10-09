@@ -25,7 +25,7 @@ No physical Android device is attached to this workspace. GitHub run 37937166208
 6. Verify the 180-second pairing-discovery timeout, 120-second code-entry expiration and 30-second post-pair service timeout each stop discovery, update the notification and allow retry/cancel. Check notification state and diagnostics without logging the code.
 6. Test wrong code, wrong port, expired pairing, network change, cancellation, timeout and already-paired state.
 7. Use the notification Disconnect action, then retry; verify the Android Keystore identity survives Activity recreation and the connected-device foreground service is not accidentally torn down when Settings recreates the Activity.
-8. Test mDNS discovery, multicast behavior and cleanup.
+8. Test mDNS discovery, multicast behavior and cleanup. Confirm the Wi-Fi multicast lock is held only while discovery is active and released on resolve/discovery failure, timeout, cancel, connect handoff and service destruction.
 9. Confirm no pairing codes, private keys or authentication payloads enter logs.
 10. Repeat on Android 12 and Android 16 where available.
 

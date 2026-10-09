@@ -179,6 +179,13 @@ def main() -> int:
     require("VCLIENT_FILE" in prepare_engine_source and "mClassLoader" in prepare_engine_source and
             "VirtualApp could not resolve the guest class loader" in prepare_engine_source,
             "Guest class-loader fallback/diagnostic patch must remain explicit and idempotent.")
+    require("MIRROR_LOADEDAPK_FILE" in prepare_engine_source and "@MethodParams({})" in prepare_engine_source,
+            "LoadedApk.getClassLoader mirror must be bound to its exact no-argument signature.")
+    require("WifiManager.MulticastLock" in pairing_service_source and "acquireMulticastLock()" in pairing_service_source and
+            "releaseMulticastLock()" in pairing_service_source,
+            "mDNS discovery must hold and reliably release a bounded Wi-Fi multicast lock.")
+    require('ensureForeground("Pairing code submitted securely.", notificationId = activeNotificationId)' in pairing_service_source,
+            "Submitting RemoteInput must update the active notification ID rather than leaving a stale code-entry notification.")
 
     require("Wireless Debugging" in main_source, "Dashboard lacks Wireless Debugging path.")
     require("Shizuku" in main_source, "Dashboard lacks optional Shizuku path.")

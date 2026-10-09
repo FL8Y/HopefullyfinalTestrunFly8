@@ -17,6 +17,7 @@ ENGINE = ROOT / "vendor/virtualapp16/lib"
 GRADLE_FILE = ENGINE / "build.gradle"
 ENVIRONMENT_FILE = ENGINE / "src/main/java/com/lody/virtual/os/VEnvironment.java"
 VCLIENT_FILE = ENGINE / "src/main/java/com/lody/virtual/client/VClientImpl.java"
+MIRROR_LOADEDAPK_FILE = ENGINE / "src/main/java/mirror/android/app/LoadedApk.java"
 LEGACY_MAVEN_MIRROR = "https://artifactory.appodeal.com/appodeal-public"
 
 
@@ -155,15 +156,28 @@ def patch_scoped_virtual_storage() -> bool:
 
 def patch_api36_guest_classloader() -> bool:
     """
-    Guard VirtualApp's Android S+ guest class-loader lookup.
+    Harden the pinned VirtualApp guest class-loader lookup on Android S+.
 
-    API 36 CI reached VClientImpl.bindApplicationNoCheck() and crashed because
-    LoadedApk.getClassLoader.call(data.info) returned null before cl.getParent().
-    RefMethod.call() swallows reflection failures and returns null, hiding the
-    original lookup error. Retry through the framework getter, then inspect the
-    existing mClassLoader field; if both fail, log the real problem and throw a
-    package/API-specific exception instead of the current opaque NPE.
+    API 36 CI observed a null ClassLoader from the mirror method followed by
+    VClientImpl dereferencing cl.getParent(). RefMethod.call() suppresses lookup
+    exceptions and returns null. Bind LoadedApk.getClassLoader to its exact
+    zero-argument signature, then retain a runtime getter/field fallback with
+    package/API-specific diagnostics instead of an opaque NPE.
     """
+    changed = False
+    mirror_source = require_file(MIRROR_LOADEDAPK_FILE)
+    unannotated = "    public static RefMethod<ClassLoader> getClassLoader;"
+    annotated = "    @MethodParams({})\n" + unannotated
+    if annotated not in mirror_source:
+        if unannotated not in mirror_source:
+            raise RuntimeError(
+                "Could not find LoadedApk.getClassLoader mirror declaration; "
+                "review the pinned engine source before patching."
+            )
+        mirror_source = mirror_source.replace(unannotated, annotated, 1)
+        MIRROR_LOADEDAPK_FILE.write_text(mirror_source, encoding="utf-8")
+        changed = True
+
     source = require_file(VCLIENT_FILE)
     old = """        ClassLoader cl = LoadedApk.getClassLoader.call(data.info);
         if (BuildCompat.isS()) {
@@ -203,15 +217,15 @@ def patch_api36_guest_classloader() -> bool:
         }
         if (BuildCompat.isS()) {
             ClassLoader parent = cl.getParent();"""
-    if old not in source:
-        if "VirtualApp could not resolve the guest class loader for " in source:
-            return False
+    if old in source:
+        VCLIENT_FILE.write_text(source.replace(old, new, 1), encoding="utf-8")
+        changed = True
+    elif "VirtualApp could not resolve the guest class loader for " not in source:
         raise RuntimeError(
             "Could not find the expected VClientImpl guest class-loader block; "
-            "review the pinned engine source before applying the API 36 compatibility patch."
+            "review the pinned engine source before applying the API compatibility patch."
         )
-    VCLIENT_FILE.write_text(source.replace(old, new, 1), encoding="utf-8")
-    return True
+    return changed
 
 
 def main() -> int:
