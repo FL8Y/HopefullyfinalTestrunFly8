@@ -43,6 +43,7 @@ class WirelessPairingService : Service() {
     private var pairedHost: String? = null
     private var phase = Phase.FINDING_PAIRING
     private var discoveryStartedAt = 0L
+    private var resolveInFlight = false
 
     private enum class Phase { FINDING_PAIRING, ENTER_CODE, PAIRING, FINDING_CONNECT, CONNECTING, CONNECTED, FAILED }
 
@@ -92,9 +93,13 @@ class WirelessPairingService : Service() {
         return START_STICKY
     }
 
-    private fun ensureForeground(message: String, notificationId: Int = NOTIFICATION_ID_FINDING) {
+    private fun ensureForeground(
+        message: String,
+        notificationId: Int = NOTIFICATION_ID_FINDING,
+        showCodeInput: Boolean = false,
+    ) {
         activeNotificationId = notificationId
-        val notification = buildNotification(message, showCodeInput = false)
+        val notification = buildNotification(message, showCodeInput = showCodeInput)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceCompat.startForeground(
                 this,
@@ -147,7 +152,7 @@ class WirelessPairingService : Service() {
             .setOngoing(phase != Phase.CONNECTED && phase != Phase.FAILED)
             .setOnlyAlertOnce(false)
             .setContentIntent(openPending)
-            .addAction(0, "Cancel", cancelPending)
+            .apply { if (phase != Phase.CONNECTED) addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelPending) }
 
         if (showCodeInput && phase == Phase.ENTER_CODE) {
             val submitIntent = Intent(this, WirelessPairingService::class.java).setAction(ACTION_SUBMIT_CODE)
@@ -160,7 +165,7 @@ class WirelessPairingService : Service() {
                 .setAllowFreeFormInput(true)
                 .setEditChoicesBeforeSending(RemoteInput.EDIT_CHOICES_BEFORE_SENDING_DISABLED)
                 .build()
-            val action = NotificationCompat.Action.Builder(0, "Pair", submitPending)
+            val action = NotificationCompat.Action.Builder(android.R.drawable.ic_lock_lock, "Pair", submitPending)
                 .addRemoteInput(remoteInput)
                 .setAllowGeneratedReplies(false)
                 .build()
@@ -179,14 +184,14 @@ class WirelessPairingService : Service() {
                 Intent(this, WirelessPairingService::class.java).setAction(ACTION_DISCONNECT),
                 PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag(),
             )
-            builder.addAction(0, "Disconnect ADB", disconnectPending)
+            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "Disconnect ADB", disconnectPending)
         } else if (phase == Phase.FAILED && pairedHost != null) {
             val retryPending = PendingIntent.getService(
                 this, REQUEST_RETRY,
                 Intent(this, WirelessPairingService::class.java).setAction(ACTION_RETRY_CONNECT),
                 PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag(),
             )
-            builder.addAction(0, "Retry connection", retryPending)
+            builder.addAction(android.R.drawable.ic_menu_rotate, "Retry connection", retryPending)
         }
         return builder.build()
     }
@@ -195,7 +200,7 @@ class WirelessPairingService : Service() {
         val nextId = if (showCodeInput) NOTIFICATION_ID_CODE else activeNotificationId
         if (alertAgain && nextId != activeNotificationId) {
             val previous = activeNotificationId
-            ensureForeground(message, nextId)
+            ensureForeground(message, nextId, showCodeInput)
             if (previous != nextId) (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(previous)
         } else {
             activeNotificationId = nextId
@@ -227,13 +232,17 @@ class WirelessPairingService : Service() {
 
             override fun onServiceFound(info: NsdServiceInfo) {
                 if (!info.serviceType.orEmpty().contains(serviceType, ignoreCase = true)) return
+                if (resolveInFlight) return
+                resolveInFlight = true
                 try {
                     manager.resolveService(info, object : NsdManager.ResolveListener {
                         override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                            resolveInFlight = false
                             Fly8Diagnostics.record("ADB pairing", "mDNS resolve failed for $serviceType (code $errorCode).")
                         }
 
                         override fun onServiceResolved(resolved: NsdServiceInfo) {
+                            resolveInFlight = false
                             val host = resolved.host?.hostAddress ?: return
                             val port = resolved.port
                             if (port !in 1..65535) return
@@ -260,6 +269,7 @@ class WirelessPairingService : Service() {
                         }
                     })
                 } catch (error: Exception) {
+                    resolveInFlight = false
                     Fly8Diagnostics.record("ADB pairing", "Could not resolve mDNS service.", error)
                 }
             }
@@ -305,6 +315,7 @@ class WirelessPairingService : Service() {
     private fun stopDiscovery() {
         val listener = discovery ?: return
         discovery = null
+        resolveInFlight = false
         runCatching { nsd.stopServiceDiscovery(listener) }
     }
 
