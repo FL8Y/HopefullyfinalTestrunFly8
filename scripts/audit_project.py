@@ -17,6 +17,7 @@ SETTINGS = ROOT / "settings.gradle.kts"
 ENGINE_GRADLE = ROOT / "vendor/virtualapp16/lib/build.gradle"
 MODULES = ROOT / ".gitmodules"
 MAIN = ROOT / "app/src/main/java/com/fl8y/lightcloner/MainActivity.kt"
+DIAGNOSTICS = ROOT / "app/src/main/java/com/fl8y/lightcloner/Fly8Diagnostics.kt"
 APP_CLASS = ROOT / "app/src/main/java/com/fl8y/lightcloner/Fly8Application.kt"
 ADB = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/WirelessAdbController.kt"
 ADB_MANAGER = ROOT / "app/src/main/java/com/fl8y/lightcloner/connection/Fly8AdbManager.kt"
@@ -66,6 +67,7 @@ def main() -> int:
     engine_gradle_source = read_text(ENGINE_GRADLE)
     modules_source = read_text(MODULES)
     main_source = read_text(MAIN)
+    diagnostics_source = read_text(DIAGNOSTICS)
     app_class_source = read_text(APP_CLASS)
     adb_source = read_text(ADB)
     adb_manager_source = read_text(ADB_MANAGER)
@@ -166,6 +168,13 @@ def main() -> int:
     require("previewAvailable = null" in engine_adapter and "taskVisible = null" in engine_adapter,
             "Unverified task/preview state must remain unknown rather than fabricated.")
 
+    require("MAX_ENTRIES = 300" in diagnostics_source, "Bounded diagnostics buffer must stay capped at 300 entries.")
+    require("Authentication codes and private keys must never be passed to record()" in diagnostics_source,
+            "Diagnostics must document the exclusion of pairing codes and private keys.")
+    require("View diagnostic log" in main_source and "Copy diagnostic log" in main_source,
+            "About screen must provide diagnostic log viewing and copy controls.")
+    require("Fly8Diagnostics.record" in adb_source and "Fly8Diagnostics.record" in engine_runtime and "Fly8Diagnostics.record" in engine_adapter,
+            "ADB, virtual-service startup and guest lifecycle must record diagnostic events.")
     require("interface VirtualizationEngine" in engine_contract, "VirtualizationEngine contract missing.")
     warnings.append("Source checks are not Android build or device runtime proof; guest rendering/task/background parity remains unverified.")
 
