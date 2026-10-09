@@ -104,6 +104,19 @@ def main() -> int:
                 any("rikka.shizuku.ShizukuProvider" == p.attrib.get(ANDROID_NS + "name") for p in providers),
                 "Optional Shizuku provider is missing.",
             )
+
+            declared_permissions = {
+                permission.attrib.get(ANDROID_NS + "name")
+                for permission in manifest.findall("uses-permission")
+            }
+            require(
+                "android.permission.FOREGROUND_SERVICE" in declared_permissions,
+                "Host must declare FOREGROUND_SERVICE for the pinned engine daemon.",
+            )
+            require(
+                "android.permission.FOREGROUND_SERVICE_DATA_SYNC" in declared_permissions,
+                "Host must declare FOREGROUND_SERVICE_DATA_SYNC for the engine's dataSync service.",
+            )
         except ET.ParseError as exc:
             errors.append(f"Manifest XML is invalid: {exc}")
 

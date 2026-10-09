@@ -205,7 +205,12 @@ jobs:
               cat "$runtime_log"
               exit 1
             fi
-            echo "API ${{ matrix.api-level }}: host Activity/process launch passed. Engine logs were captured; guest UI/render/task parity is not asserted by this smoke test." >> "$GITHUB_STEP_SUMMARY"
+            if ! grep -q 'Virtual service answered; virtual-user count=' "$runtime_log"; then
+              echo "API ${{ matrix.api-level }}: host Activity is alive, but VirtualCore did not confirm Binder/user-service readiness." >> "$GITHUB_STEP_SUMMARY"
+              cat "$start_log" "$runtime_log"
+              exit 1
+            fi
+            echo "API ${{ matrix.api-level }}: host Activity/process and VirtualCore Binder/user-service readiness passed. This still does not prove guest UI/render/task/AFK parity." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload emulator smoke evidence
         if: always()
