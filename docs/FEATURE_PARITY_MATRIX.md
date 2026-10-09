@@ -55,7 +55,7 @@ This matrix carries the complete acceptance scope forward. A status applies to e
 | 47 | Validate screen-off / screen-on resume without forcing display permanently awake. | UNVERIFIED | No device-tested implementation exists. |
 | 48 | Validate Wi-Fi/network sockets, callbacks and guest network continuity. | UNVERIFIED | No running guest exists yet. |
 | 49 | Keep ADB and Shizuku completely separate so each can operate without the other. | PARTIAL | Separate code paths exist; dependency injection and isolated regression tests are still needed. |
-| 50 | Make pairing a minimal, guided flow with accurate status feedback. | PARTIAL | New foreground discovery notification, inline RemoteInput code entry and manual fallback are implemented; device UX/head-up behavior still requires testing. |
+| 50 | Make pairing a minimal, guided flow with accurate status feedback. | PARTIAL | Foreground discovery notification and inline RemoteInput code entry are implemented; CI is being extended to prove notification startup on API 31/36, while actual phone-to-pairing discovery/head-up behavior still requires testing. |
 | 51 | Prefer direct Wireless Debugging settings access with safe fallback. | PARTIAL | Implemented as a starter Intent/fallback, not yet verified on vendor ROMs. |
 | 52 | Use proper ADB pairing/authentication instead of a fake success state. | PARTIAL | LibADB API is called, but the callback currently treats completion as success without target-device evidence. Verify library semantics and tests. |
 | 53 | Audit LibADB's local sockets, mDNS, Keystore, peer trust and cleanup integration. | PARTIAL | Dependency/API source reviewed; FLY8 adaptations and lifecycle need tests. |

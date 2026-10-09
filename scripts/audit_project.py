@@ -224,6 +224,8 @@ def main() -> int:
             "Emulator smoke test must require real VirtualCore Binder/user-service readiness.")
     require("mResumedActivity" in smoke_source and "com.fl8y.lightcloner" in smoke_source,
             "Emulator smoke test must verify the actual FLY8 host Activity is resumed.")
+    require("WirelessPairingService" in smoke_source and "dumpsys notification" in smoke_source,
+            "Emulator smoke test must verify notification-led pairing service startup and notification visibility.")
     require("interface VirtualizationEngine" in engine_contract, "VirtualizationEngine contract missing.")
     warnings.append("Source checks are not Android build or device runtime proof; guest rendering/task/background parity remains unverified.")
 

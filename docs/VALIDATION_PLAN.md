@@ -18,7 +18,7 @@ No Android device is attached to this workspace, so all hardware/runtime rows re
 ## Wireless Debugging / ADB
 
 1. Test with Shizuku not installed or stopped.
-2. Tap **Connect via Wireless Debugging**; allow notifications when requested. FLY8 must start its foreground discovery service before opening Android Wireless Debugging.
+2. Tap **Connect via Wireless Debugging**; allow notifications when requested. FLY8 must start its foreground discovery service before opening Android Wireless Debugging. CI also checks that the foreground notification is observable on API 31/API 36, but that does not simulate a phone pairing endpoint.
 3. In Android Settings, open **Pair device with pairing code**. Verify the FLY8 notification changes from “Finding wireless debugging pairing service…” to a notification with inline six-digit code entry.
 4. Submit the code from the notification. Verify the real LibADB pairing handshake, then separately discover `_adb-tls-connect._tcp` and connect to the matching host.
 5. Verify connected state using `AbsAdbConnectionManager.isConnected()` and run a harmless diagnostic service call. Check notification state and diagnostics without logging the code.
