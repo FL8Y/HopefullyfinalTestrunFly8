@@ -14,6 +14,7 @@ ICON_ADAPTIVE_ROUND = ROOT / "app/src/main/res/mipmap-anydpi-v26/ic_launcher_rou
 ICON_FOREGROUND = ROOT / "app/src/main/res/mipmap-nodpi/ic_launcher_foreground.png"
 APP_GRADLE = ROOT / "app/build.gradle.kts"
 SETTINGS = ROOT / "settings.gradle.kts"
+ENGINE_GRADLE = ROOT / "vendor/virtualapp16/lib/build.gradle"
 MODULES = ROOT / ".gitmodules"
 MAIN = ROOT / "app/src/main/java/com/fl8y/lightcloner/MainActivity.kt"
 APP_CLASS = ROOT / "app/src/main/java/com/fl8y/lightcloner/Fly8Application.kt"
@@ -61,6 +62,7 @@ def read_text(path: Path) -> str:
 def main() -> int:
     app_gradle = read_text(APP_GRADLE)
     settings_source = read_text(SETTINGS)
+    engine_gradle_source = read_text(ENGINE_GRADLE)
     modules_source = read_text(MODULES)
     main_source = read_text(MAIN)
     app_class_source = read_text(APP_CLASS)
@@ -133,6 +135,10 @@ def main() -> int:
     require('implementation("dev.rikka.shizuku:api:13.1.5")' in app_gradle, "Optional Shizuku API dependency missing.")
     require('implementation("dev.rikka.shizuku:provider:13.1.5")' in app_gradle, "Optional Shizuku provider dependency missing.")
     require('include(":virtual-engine")' in settings_source, "Virtual engine project is not included by Gradle.")
+    require('maven { url = uri("https://artifactory.appodeal.com/appodeal-public") }' in settings_source,
+            "Root dependency repositories must include the JCenter artifact mirror.")
+    require("aidl = true" in engine_gradle_source,
+            "Virtual engine Gradle configuration must enable AIDL generation for Binder interfaces.")
     require("f0restw0w/VirtualApp_16.git" in modules_source, "Pinned VirtualApp-derived source is not registered as a submodule.")
 
     require("Wireless Debugging" in main_source, "Dashboard lacks Wireless Debugging path.")
