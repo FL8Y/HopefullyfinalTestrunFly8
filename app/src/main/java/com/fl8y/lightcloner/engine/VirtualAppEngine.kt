@@ -251,11 +251,15 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
         userId: Int,
         userName: String? = VUserManager.get().getUserInfo(userId)?.name,
     ): CloneSession {
-        val running = runCatching {
-            VirtualCore.get().isAppRunning(info.packageName, userId)
+        val state = runCatching {
+            if (VirtualCore.get().isAppRunning(info.packageName, userId)) {
+                CloneSession.State.RUNNING
+            } else {
+                CloneSession.State.INSTALLED
+            }
         }.getOrElse {
             Log.w(TAG, "Unable to query process state for ${info.packageName} / $userId.", it)
-            false
+            CloneSession.State.UNKNOWN
         }
 
         return CloneSession(
@@ -264,7 +268,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
             label = resolveLabel(info, userId) +
                 if (userId == DEFAULT_USER) "" else " · $userId",
             virtualUserId = userId,
-            state = if (running) CloneSession.State.RUNNING else CloneSession.State.INSTALLED,
+            state = state,
             taskVisible = null,
             previewAvailable = null,
         )

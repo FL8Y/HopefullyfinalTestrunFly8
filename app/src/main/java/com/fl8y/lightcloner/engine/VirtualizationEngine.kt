@@ -63,5 +63,7 @@ data class CloneSession(
         STOPPING,
         STOPPED,
         FAILED,
+        /** The engine could not determine process liveness; do not infer stopped. */
+        UNKNOWN,
     }
 }
