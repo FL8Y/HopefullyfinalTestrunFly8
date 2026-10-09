@@ -16,10 +16,10 @@ The repository now contains:
 - A 76-row parity matrix, a reference evidence map, a validation plan, and source-audit scripts.
 - CI source checks, Android build steps, and a six/nine-commit reminder cadence.
 
-**Still unverified:** No successful Android build or on-device guest launch has yet been confirmed. The adapter is now wired to real upstream APIs, but that is not proof those APIs compile and run correctly when integrated into FLY8.
+**Build status:** GitHub Actions run `37912492731` built the debug APK successfully at commit `f92c7985`, and its artifact was uploaded. A later diagnostics enhancement (`c1df5660`) exposed a Kotlin return-type error in virtual service startup; this pending change adds the explicit `Unit` return fix and the next CI run will verify it. No real-device guest launch or runtime parity has been confirmed.
 
 Not yet demonstrated:
-- A successful Android 16/API 36 build from Actions.
+- Successful installation, application startup and virtual-service bootstrap on Android 12/API 31 and Android 16/API 36 devices.
 - End-to-end Wireless Debugging pair/connect on a device.
 - A test APK's complete virtual installation, process initialization, Activity creation, rendering and input.
 - Actual task/Recent Apps resume, independent instance data, display/live feed, and AFK/screen-off operation.
@@ -47,12 +47,13 @@ The project targets SDK 36 and uses Java 17/Kotlin. The checked-in workflow:
 - runs `scripts/audit_project.py`,
 - builds the debug APK,
 - uploads the APK artifact on success,
+- runs API 31/API 36 emulator smoke checks that validate the host Activity/process and collect virtualization logs (not guest rendering/task parity),
 - emits a source/requirements reminder every 6 commits,
 - fetches the external guiding prompt as an artifact every 9 commits.
 
 The project currently patches the upstream library's old Gradle metadata to build with the selected SDK, and relocates its virtual shared storage into FLY8's app-scoped files area so the host does not need broad all-files access. The pinned engine source is maintained as a submodule; initialize it recursively for local builds.
 
-The workflow has not yet returned a successful build result. Check the Actions tab before relying on a build result.
+The workflow produced a successful APK in run `37912492731`. The latest diagnostics enhancement requires the current build to pass before using its APK. Emulator smoke testing is being added for API 31 and API 36; physical-device guest virtualization, rendering/input, Recent Apps and screen-off behavior still need separate validation.
 
 ## Repository layout
 

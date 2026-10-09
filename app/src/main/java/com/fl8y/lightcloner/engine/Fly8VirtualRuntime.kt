@@ -86,6 +86,7 @@ object Fly8VirtualRuntime {
 
         Fly8Diagnostics.record("Service", "Virtual service answered; virtual-user count=${virtualUsers.size}.")
         Log.i(TAG, "Virtual service answered; virtual-user count=${virtualUsers.size}.")
+        Unit
     }.onFailure {
         Fly8Diagnostics.record("Service", "Virtual service initialization failed.", it)
     }

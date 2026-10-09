@@ -241,7 +241,7 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
         val core = VirtualCore.get()
         val userManager = VUserManager.get()
 
-        return core.getInstalledApps(0)
+        val sessions = core.getInstalledApps(0)
             .orEmpty()
             .flatMap { info ->
                 val users = info.getInstalledUsers() ?: intArrayOf()
@@ -256,6 +256,9 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
                 }
             }
             .sortedWith(compareBy({ it.label.lowercase() }, { it.virtualUserId }))
+
+        Fly8Diagnostics.record("Task", "Task visibility and preview availability remain UNKNOWN; no real task probe is wired.")
+        return sessions
     }
 
     private fun sessionFor(
