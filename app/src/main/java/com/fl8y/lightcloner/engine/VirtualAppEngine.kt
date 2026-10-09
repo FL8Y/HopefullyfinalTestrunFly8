@@ -233,10 +233,9 @@ class VirtualAppEngine(context: Context) : VirtualizationEngine {
             .orEmpty()
             .flatMap { info ->
                 val users = info.getInstalledUsers() ?: intArrayOf()
-                users.mapNotNull { userId ->
-                    if (!core.isAppInstalledAsUser(userId, info.packageName)) {
-                        return@mapNotNull null
-                    }
+                users.filter { userId ->
+                    core.isAppInstalledAsUser(userId, info.packageName)
+                }.map { userId ->
                     sessionFor(
                         info,
                         userId,
