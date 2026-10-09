@@ -4,7 +4,7 @@
 
 No feature is considered complete because a screen exists or a build succeeds. Each test records the exact FLY8 commit, APK checksum, device model, Android/API version, test app/version, steps, result, logs, and known limitation. Never record "pass" without evidence.
 
-No Android device is attached to this workspace, so all hardware/runtime rows remain pending until a real tester runs them.
+No physical Android device is attached to this workspace. GitHub run 37937166208 shows API 31 smoke success and an API 36 guest class-loader failure; hardware pairing/head-up behavior and OEM-specific lifecycle remain pending.
 
 ## Build and source checks
 
@@ -19,7 +19,7 @@ No Android device is attached to this workspace, so all hardware/runtime rows re
 
 1. Test with Shizuku not installed or stopped.
 2. Tap **Connect via Wireless Debugging**; allow notifications when requested. FLY8 must start its foreground discovery service before opening Android Wireless Debugging. CI also checks that the foreground notification is observable on API 31/API 36, but that does not simulate a phone pairing endpoint.
-3. In Android Settings, open **Pair device with pairing code**. Verify the FLY8 notification changes from “Finding wireless debugging pairing service…” to a notification with inline six-digit code entry.
+3. In Android Settings, open **Pair device with pairing code**. Verify the FLY8 notification changes from “Finding wireless debugging pairing service…” to a notification with inline six-digit code entry. Current CI tests initial discovery notification only; it does not simulate the device pairing endpoint or test RemoteInput/head-up presentation.
 4. Submit the code from the notification. Verify the real LibADB pairing handshake, then separately discover `_adb-tls-connect._tcp` and connect to the matching host.
 5. Verify connected state using `AbsAdbConnectionManager.isConnected()` and run a harmless diagnostic service call.
 6. Verify the 180-second pairing-discovery timeout, 120-second code-entry expiration and 30-second post-pair service timeout each stop discovery, update the notification and allow retry/cancel. Check notification state and diagnostics without logging the code.
@@ -36,6 +36,12 @@ No Android device is attached to this workspace, so all hardware/runtime rows re
 3. Register and remove binder/permission listeners correctly.
 4. Verify an operation only reports success after the actual operation returns a valid result.
 5. Verify disabling the Shizuku route leaves ADB functionality intact.
+
+## Latest emulator finding (run 37937166208)
+
+- API 31 smoke job completed successfully.
+- API 36 guest fixture failed during a real virtual launch at `com.lody.virtual.client.VClientImpl.bindApplicationNoCheck` line 389. The pinned source calls `LoadedApk.getClassLoader.call(data.info)` and the next line dereferences a null class loader.
+- A reproducible compatibility patch is being added to `scripts/prepare_virtual_engine.py`; the acceptance bar remains successful visible guest rendering and input, not merely avoiding an NPE.
 
 ## Clone install and runtime
 

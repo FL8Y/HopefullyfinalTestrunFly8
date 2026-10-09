@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINE = ROOT / "vendor/virtualapp16/lib"
 GRADLE_FILE = ENGINE / "build.gradle"
 ENVIRONMENT_FILE = ENGINE / "src/main/java/com/lody/virtual/os/VEnvironment.java"
+VCLIENT_FILE = ENGINE / "src/main/java/com/lody/virtual/client/VClientImpl.java"
 LEGACY_MAVEN_MIRROR = "https://artifactory.appodeal.com/appodeal-public"
 
 
@@ -152,16 +153,79 @@ def patch_scoped_virtual_storage() -> bool:
     return True
 
 
+def patch_api36_guest_classloader() -> bool:
+    """
+    Guard VirtualApp's Android S+ guest class-loader lookup.
+
+    API 36 CI reached VClientImpl.bindApplicationNoCheck() and crashed because
+    LoadedApk.getClassLoader.call(data.info) returned null before cl.getParent().
+    RefMethod.call() swallows reflection failures and returns null, hiding the
+    original lookup error. Retry through the framework getter, then inspect the
+    existing mClassLoader field; if both fail, log the real problem and throw a
+    package/API-specific exception instead of the current opaque NPE.
+    """
+    source = require_file(VCLIENT_FILE)
+    old = """        ClassLoader cl = LoadedApk.getClassLoader.call(data.info);
+        if (BuildCompat.isS()) {
+            ClassLoader parent = cl.getParent();"""
+    new = """        ClassLoader cl = LoadedApk.getClassLoader.call(data.info);
+        if (cl == null && data.info != null) {
+            try {
+                java.lang.reflect.Method loaderMethod =
+                        data.info.getClass().getDeclaredMethod("getClassLoader");
+                loaderMethod.setAccessible(true);
+                Object resolvedLoader = loaderMethod.invoke(data.info);
+                if (resolvedLoader instanceof ClassLoader) {
+                    cl = (ClassLoader) resolvedLoader;
+                }
+            } catch (Throwable methodError) {
+                VLog.w(TAG, "LoadedApk.getClassLoader fallback failed for " + packageName
+                        + " on API " + Build.VERSION.SDK_INT, methodError);
+            }
+        }
+        if (cl == null && data.info != null) {
+            try {
+                java.lang.reflect.Field loaderField =
+                        data.info.getClass().getDeclaredField("mClassLoader");
+                loaderField.setAccessible(true);
+                Object resolvedLoader = loaderField.get(data.info);
+                if (resolvedLoader instanceof ClassLoader) {
+                    cl = (ClassLoader) resolvedLoader;
+                }
+            } catch (Throwable fieldError) {
+                VLog.w(TAG, "LoadedApk.mClassLoader fallback failed for " + packageName
+                        + " on API " + Build.VERSION.SDK_INT, fieldError);
+            }
+        }
+        if (cl == null) {
+            throw new IllegalStateException("VirtualApp could not resolve the guest class loader for "
+                    + packageName + " on API " + Build.VERSION.SDK_INT);
+        }
+        if (BuildCompat.isS()) {
+            ClassLoader parent = cl.getParent();"""
+    if old not in source:
+        if "VirtualApp could not resolve the guest class loader for " in source:
+            return False
+        raise RuntimeError(
+            "Could not find the expected VClientImpl guest class-loader block; "
+            "review the pinned engine source before applying the API 36 compatibility patch."
+        )
+    VCLIENT_FILE.write_text(source.replace(old, new, 1), encoding="utf-8")
+    return True
+
+
 def main() -> int:
     try:
         gradle_changed = patch_gradle()
         storage_changed = patch_scoped_virtual_storage()
+        classloader_changed = patch_api36_guest_classloader()
     except (OSError, RuntimeError, FileNotFoundError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
     print(f"Engine Gradle metadata updated: {gradle_changed}")
     print(f"Virtual storage scoped to FLY8: {storage_changed}")
+    print(f"API S+ guest class-loader guard applied: {classloader_changed}")
     print("This script patches only the checked-out submodule working tree; no source is fabricated.")
     return 0
 

@@ -33,6 +33,7 @@ ENGINE_RUNTIME = ROOT / "app/src/main/java/com/fl8y/lightcloner/engine/Fly8Virtu
 ENGINE_ADAPTER = ROOT / "app/src/main/java/com/fl8y/lightcloner/engine/VirtualAppEngine.kt"
 MATRIX = ROOT / "docs/FEATURE_PARITY_MATRIX.md"
 MAP = ROOT / "reference/REFERENCE_IMPLEMENTATION_MAP.md"
+PREPARE_ENGINE = ROOT / "scripts/prepare_virtual_engine.py"
 
 ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
 TOOLS_NS = "{http://schemas.android.com/tools}"
@@ -89,6 +90,7 @@ def main() -> int:
     engine_adapter = read_text(ENGINE_ADAPTER)
     matrix_source = read_text(MATRIX)
     map_source = read_text(MAP)
+    prepare_engine_source = read_text(PREPARE_ENGINE)
 
     if MANIFEST.exists():
         try:
@@ -172,6 +174,11 @@ def main() -> int:
     require("aidl = true" in engine_gradle_source,
             "Virtual engine Gradle configuration must enable AIDL generation for Binder interfaces.")
     require("f0restw0w/VirtualApp_16.git" in modules_source, "Pinned VirtualApp-derived source is not registered as a submodule.")
+    require("patch_api36_guest_classloader()" in prepare_engine_source,
+            "Pinned VirtualApp API S+ guest class-loader compatibility patch is not applied by the preparation script.")
+    require("VCLIENT_FILE" in prepare_engine_source and "mClassLoader" in prepare_engine_source and
+            "VirtualApp could not resolve the guest class loader" in prepare_engine_source,
+            "Guest class-loader fallback/diagnostic patch must remain explicit and idempotent.")
 
     require("Wireless Debugging" in main_source, "Dashboard lacks Wireless Debugging path.")
     require("Shizuku" in main_source, "Dashboard lacks optional Shizuku path.")
@@ -263,6 +270,8 @@ def main() -> int:
     )
     require(counted_rows == 76, f"Expected 76 tracked parity rows, found {counted_rows}.")
     require("Evidence still required" in map_source, "Reference evidence ledger lacks evidence gaps.")
+    require("VClientImpl.bindApplicationNoCheck" in matrix_source and "API 36" in matrix_source,
+            "Parity matrix must record the current reproducible API 36 guest launch failure until render/input passes.")
 
     # Construct the forbidden label from pieces so this checker does not itself
     # embed the full vendor label as a searchable string.

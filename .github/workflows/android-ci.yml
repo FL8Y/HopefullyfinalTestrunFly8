@@ -76,8 +76,10 @@ jobs:
             echo "- Commits after cadence anchor: **$count**"
             echo "- Six-commit source/memory review due: **$memory_due**"
             echo "- Nine-commit guide refresh due: **$blueprint_due**"
+            echo "- Authoritative 76-section guide: https://github.com/FL8Y/readthischatgpt/tree/main"
+            echo "- Acceptance ledger: docs/FEATURE_PARITY_MATRIX.md"
             echo ""
-            echo "Reminder only: read the source, inspect recent diffs, review the matrix and validate runtime behavior."
+            echo "When either checkpoint is due, do not begin a new architecture change until the full guide/matrix/recent diffs/latest Actions results have actually been reviewed."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Six-commit guide and memory review checkpoint
