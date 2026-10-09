@@ -16,6 +16,6 @@ object WirelessDebuggingLauncher {
             return
         }
 
-        activity.startActivity(Intent(Settings.ACTION_DEVELOPMENT_SETTINGS))
+        activity.startActivity(Intent("android.settings.APPLICATION_DEVELOPMENT_SETTINGS"))
     }
 }
